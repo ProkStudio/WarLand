@@ -1,0 +1,25 @@
+[Unit]
+Description=WarLand Fabric Minecraft Server
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=warland
+Group=warland
+WorkingDirectory=/opt/warland/runtime
+ExecStart=/usr/bin/java -Xms768M -Xmx2400M -XX:+UseG1GC -jar fabric-server-launch.jar nogui
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=90
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/warland/runtime
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
