@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "ru.warland.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["BlockItemMixin", "ExplosionMixin", "PistonMixin", "FluidMixin", "FireMixin", "EndPortalMixin"],
+  "injectors": {"defaultRequire": 1}
+}
