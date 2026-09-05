@@ -48,7 +48,7 @@ final class CapitalService {
     void tick() {
         if(!store.idle() || writesPending || registered) return;
         ServerWorld world=server.getWorld(WORLD);
-        if(world==null) return; // Missing dimension resources: do not fall back to the overworld.
+        if(world==null) return;
         var c=store.data().capital;
         if(c.stage.equals("PAUSED") || c.stage.equals("NEW")) return;
         long until=System.nanoTime()+store.data().config.tickMicros*1000L;
@@ -57,7 +57,7 @@ final class CapitalService {
             for(int n=0;verify<target && n<store.data().config.scanBudget && System.nanoTime()<until;n++) {
                 var cell=cells.get(verify); BlockPos p=position(cell);
                 if(!lease.ready(world,p)) return;
-                if(!world.getBlockState(p).equals(WorldAccess.state(cell.block()))) { pause("Изменён сохранённый блок "+p.toShortString()+". Самовосстановление выключено."); return; }
+                if(!WorldAccess.compatible(world.getBlockState(p),WorldAccess.state(cell.block()))) { pause("Изменён сохранённый блок "+p.toShortString()+". Самовосстановление выключено."); return; }
                 verify++;
             }
             if(verify<target) return;
@@ -82,14 +82,14 @@ final class CapitalService {
                 var cell=cells.get(cursor); BlockPos p=position(cell);
                 if(!lease.ready(world,p)) break;
                 var expected=WorldAccess.state(cell.block()); var existing=world.getBlockState(p);
-                var action=PlacementRules.cell(true,true,existing.isAir(),!existing.getFluidState().isEmpty(),existing.equals(expected),true);
+                var action=PlacementRules.cell(true,true,existing.isAir(),!existing.getFluidState().isEmpty(),WorldAccess.compatible(existing,expected),true);
                 if(action==PlacementRules.CellAction.STOP) { pause("Конфликт в "+p.toShortString()+". Чужой блок оставлен."); return; }
                 if(action==PlacementRules.CellAction.PLACE && !world.setBlockState(p,expected,Block.NOTIFY_LISTENERS)) { pause("Не удалось разместить "+p.toShortString()); return; }
                 cursor++;
             }
             if(cursor!=c.cursor) {
                 int next=cursor; writesPending=true;
-                store.change(s->{s.capital.cursor=next;if(next==cells.size())s.capital.stage="READY";},()->{writesPending=false; if(next==cells.size()){verified=true;lease.release();}},error->writesPending=false);
+                store.change(s->{s.capital.cursor=next;if(next==cells.size())s.capital.stage="READY";},()->{writesPending=false; if(next==cells.size()){verified=false;verify=0;lease.release();}},error->writesPending=false);
             }
         }
     }
@@ -101,16 +101,14 @@ final class CapitalService {
     }
     private static BlockPos position(BlockPlan.Cell c) { return new BlockPos(c.x(),Layouts.CAPITAL_Y+c.y(),c.z()); }
     private void register(ServerWorld world) {
-        // Safe spawn/warps become visible only after the entire manifest and the arrival headroom pass.
         if(!world.isChunkLoaded(ARRIVAL)) { lease.ready(world,ARRIVAL); return; }
         if(!world.getBlockState(ARRIVAL).isAir() || !world.getBlockState(ARRIVAL.up()).isAir()
                 || !world.getBlockState(ARRIVAL.down()).isSolidBlock(world,ARRIVAL.down())) { pause("Точка прибытия занята."); return; }
-        api.setSafeSpawn(world,ARRIVAL,128);
+        api.setSafeSpawn(world,ARRIVAL,Layouts.CAPITAL_RADIUS);
         api.registerWarp("capital",world,ARRIVAL);
         for(var zone:Layouts.ZONES) api.registerWarp("capital_"+zone.id(),world,new BlockPos(zone.x(),Layouts.CAPITAL_Y+1,zone.z()+4));
         registered=true;lease.release();
         api.audit("content","capital.ready",hash);
-        // Signs are initialized separately when already-loaded, never by loading all chunks synchronously.
     }
     void updateLoadedSigns() {
         if(!registered) return;

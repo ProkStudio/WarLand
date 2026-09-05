@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import java.util.*;
 import java.util.function.Consumer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
@@ -22,6 +23,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.slf4j.Logger;
@@ -70,7 +72,10 @@ public final class ContentFeature implements Feature {
         });
         PlayerBlockBreakEvents.BEFORE.register((world,player,pos,state,entity)->!protectedCell(world,pos));
         AttackBlockCallback.EVENT.register((player,world,hand,pos,direction)->protectedCell(world,pos)?ActionResult.FAIL:ActionResult.PASS);
-        UseBlockCallback.EVENT.register((player,world,hand,hit)-> {
+        // Read-only service dispatch precedes the core safe-zone veto, regardless of initialization order.
+        Identifier terminalPhase=Identifier.of("warland","content_terminals");
+        UseBlockCallback.EVENT.addPhaseOrdering(terminalPhase,Event.DEFAULT_PHASE);
+        UseBlockCallback.EVENT.register(terminalPhase,(player,world,hand,hit)-> {
             if(world.isClient() || !(player instanceof ServerPlayerEntity serverPlayer))return ActionResult.PASS;
             if(world.getRegistryKey().equals(CapitalService.WORLD)) {
                 if(hand==Hand.MAIN_HAND && uiReady(serverPlayer)) {
@@ -101,11 +106,15 @@ public final class ContentFeature implements Feature {
     @Override public void tick(MinecraftServer server) {
         if(!started || !store.ready() || !api.ready())return;
         ticks++;
-        capital.tick();buildings.tick(ticks);activities.tick(ticks);
+        try { capital.tick();buildings.tick(ticks);activities.tick(ticks); }
+        catch(RuntimeException failure) {
+            LOG.error("Content suspended after a runtime error; recovery required",failure);
+            started=false;capital.stop();store.close();return;
+        }
         if(ticks%20==0) {
             capital.updateLoadedSigns();
             if(capital.isReady())for(var p:server.getPlayerManager().getPlayerList())if(p.getEntityWorld().getRegistryKey().equals(CapitalService.WORLD) && p.getY()<Layouts.CAPITAL_Y-8) {
-                p.requestTeleport(CapitalService.ARRIVAL.getX()+0.5,CapitalService.ARRIVAL.getY(),CapitalService.ARRIVAL.getZ()+0.5);
+                p.requestTeleportAndDismount(CapitalService.ARRIVAL.getX()+0.5,CapitalService.ARRIVAL.getY(),CapitalService.ARRIVAL.getZ()+0.5);
                 p.fallDistance=0;
             }
         }
