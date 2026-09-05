@@ -30,6 +30,19 @@ final class WorldAccess {
             return result;
         });
     }
+    /** Ignore only vanilla transient leaf distance, wall connections and target pulse power. */
+    static boolean compatible(BlockState actual,BlockState expected) {
+        if(actual.getBlock()!=expected.getBlock()) return false;
+        String block=Registries.BLOCK.getId(expected.getBlock()).getPath();
+        for(Property<?> property:expected.getProperties()) {
+            String name=property.getName();
+            boolean transientValue=(block.endsWith("_leaves") && name.equals("distance"))
+                    || (block.endsWith("_wall") && java.util.Set.of("north","south","east","west","up").contains(name))
+                    || (block.equals("target") && name.equals("power"));
+            if(!transientValue && !java.util.Objects.equals(actual.get(property),expected.get(property))) return false;
+        }
+        return true;
+    }
     private static <T extends Comparable<T>> BlockState apply(BlockState state,Property<T> property,String value) {
         return state.with(property,property.parse(value).orElseThrow(()->new IllegalArgumentException("Bad block property")));
     }
@@ -38,15 +51,21 @@ final class WorldAccess {
         private static final ChunkTicketType TYPE=new ChunkTicketType(40,ChunkTicketType.FOR_LOADING);
         private ServerWorld world;
         private ChunkPos chunk;
+        private long refreshed=Long.MIN_VALUE;
+        private boolean loaded;
         boolean ready(ServerWorld next,BlockPos pos) {
-            ChunkPos wanted=new ChunkPos(pos);
-            if(world!=next || !wanted.equals(chunk)) { release(); world=next; chunk=wanted; }
-            world.getChunkManager().addTicket(TYPE,chunk,0);
-            return world.isChunkLoaded(chunk.x,chunk.z);
+            int x=pos.getX()>>4,z=pos.getZ()>>4;
+            if(world!=next || chunk==null || chunk.x!=x || chunk.z!=z) { release(); world=next; chunk=new ChunkPos(x,z); }
+            long now=world.getTime();
+            if(refreshed!=now) {
+                world.getChunkManager().addTicket(TYPE,chunk,0);
+                loaded=world.isChunkLoaded(chunk.x,chunk.z);refreshed=now;
+            }
+            return loaded;
         }
         void release() {
             if(world!=null && chunk!=null) world.getChunkManager().removeTicket(TYPE,chunk,0);
-            world=null; chunk=null;
+            world=null; chunk=null;refreshed=Long.MIN_VALUE;loaded=false;
         }
     }
 }

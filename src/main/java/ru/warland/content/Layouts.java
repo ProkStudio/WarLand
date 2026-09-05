@@ -7,7 +7,7 @@ public final class Layouts {
     private Layouts() {}
     public static final String CAPITAL_ID = "capital_v1";
     public static final int CAPITAL_Y = 80;
-    public static final int CAPITAL_RADIUS = 112;
+    public static final int CAPITAL_RADIUS = 128;
     public record Zone(String id, String name, int x, int z, String icon, String accent) {}
     public static final List<Zone> ZONES = List.of(
             new Zone("market", "Торговый квартал", -43,-27,"minecraft:emerald","minecraft:oxidized_copper"),
@@ -85,12 +85,12 @@ public final class Layouts {
             b.block(zone.x(),3,zone.z(),"minecraft:dark_oak_sign[rotation=0]");
         }
         // Trees are explicit persistent leaves; no saplings, decay or mob spawning infrastructure.
-        int[][] trees={{-82,-76},{-62,-79},{-40,-80},{-17,-68},{16,-71},{40,-79},{66,-78},{82,-74},
-                {-82,76},{-61,80},{-39,79},{-16,68},{16,70},{40,79},{64,79},{82,74}};
+        int[][] trees={{-78,-70},{-62,-79},{-40,-80},{-17,-68},{16,-71},{40,-79},{66,-78},{78,-70},
+                {-78,70},{-61,80},{-39,79},{-16,68},{16,70},{40,79},{64,79},{78,70}};
         for(int[] p : trees) tree(b,p[0],p[1]);
         for(int x=-84;x<=84;x+=14) for(int z : new int[]{-23,23}) {
             b.block(x,0,z,"minecraft:sea_lantern");
-            if(Math.abs(x)>33) {
+            if(Math.abs(x)>33 && Math.abs(x)!=42) {
                 b.box(x,1,z,x+3,1,z,"minecraft:stone_brick_slab");
             }
         }
@@ -131,7 +131,7 @@ public final class Layouts {
         b.box(1,1,d-1,w-2,3,d-1,wall);
         b.box(0,1,1,0,3,d-2,wall);
         b.box(w-1,1,1,w-1,3,d-2,wall);
-        b.omit(w/2,1,0,w/2+1,3,0); // permanently open, two-wide entrance
+        b.omit(w/2,1,0,w/2+1,3,0);
         b.box(0,2,2,0,3,d-3,"minecraft:glass");
         b.box(w-1,2,2,w-1,3,d-3,"minecraft:glass");
         b.box(0,4,0,w-1,4,d-1,"minecraft:spruce_planks");
