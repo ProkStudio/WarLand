@@ -8,7 +8,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.Heightmap;
 import ru.warland.WarLand;
 
-/** Finds one surface candidate per second; never edits the survival world. */
+/** Prepares one surface candidate per second; never edits survival blocks. */
 public final class SurvivalTransit {
     private static final int[] OFFSETS={0,64,-64,128,-128,192,-192,256,-256};
     private final CoreRuntime runtime;
@@ -21,11 +21,14 @@ public final class SurvivalTransit {
         if(candidate>=OFFSETS.length*OFFSETS.length){complete=true;WarLand.LOG.error("No safe survival transfer point found; manual transport configuration required");return;}
         ServerWorld world=server.getOverworld();BlockPos center=world.getSpawnPoint().getPos();
         int x=center.getX()+OFFSETS[candidate%OFFSETS.length],z=center.getZ()+OFFSETS[candidate/OFFSETS.length];candidate++;
+        if(runtime.nations.claim(world.getRegistryKey().getValue().toString(),x>>4,z>>4)!=null)return;
+        // getTopY returns bottomY for unloaded chunks in 1.21.11. A single bounded
+        // startup candidate must be loaded first; do not mistake it for empty land.
+        world.getChunk(x>>4,z>>4);
         BlockPos feet=new BlockPos(x,world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,x,z),z);
-        if(!world.getWorldBorder().contains(feet)||runtime.nations.claim(world.getRegistryKey().getValue().toString(),x>>4,z>>4)!=null)return;
+        if(!world.getWorldBorder().contains(feet))return;
         if(!world.getBlockState(feet).isAir()||!world.getBlockState(feet.up()).isAir()||!world.getBlockState(feet.down()).isSolidBlock(world,feet.down())||!world.getFluidState(feet.down()).isEmpty())return;
         var floor=world.getBlockState(feet.down());if(floor.isOf(Blocks.MAGMA_BLOCK)||floor.isOf(Blocks.CACTUS))return;
-        // This protects the arrival without overwriting the actual hub spawn warp.
         runtime.safeZones.add(new CoreRuntime.SafeZone(world,feet.toImmutable(),12));
         runtime.registerWarp("survival",world,feet);complete=true;
         WarLand.LOG.info("Safe survival transit registered; no blocks modified");
