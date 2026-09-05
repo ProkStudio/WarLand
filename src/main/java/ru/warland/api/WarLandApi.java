@@ -19,6 +19,8 @@ public interface WarLandApi {
     Path dataDirectory();
     boolean ready();
     boolean canBuild(ServerPlayerEntity player, ServerWorld world, BlockPos pos);
+    default boolean canBuildCity(ServerPlayerEntity player,ServerWorld world,BlockPos pos) { return false; }
+    default boolean inventoryLocked(UUID player) { return false; }
     boolean canDamage(ServerPlayerEntity player, Entity target);
     boolean inCombat(UUID player);
     boolean staff(ServerCommandSource source, String permission);
