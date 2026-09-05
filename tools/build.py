@@ -1,28 +1,25 @@
 #!/usr/bin/env python3
-"""Small reproducible Gradle bootstrap; no vendored wrapper binary or unknown system Gradle."""
+"""Verified Gradle bootstrap. Requires Python 3 and a Java 21 JDK."""
 from pathlib import Path
 import hashlib, os, subprocess, sys, urllib.request, zipfile
-
 VERSION = "9.2.1"
 SHA256 = "72f44c9f8ebcb1af43838f45ee5c4aa9c5444898b3468ab3f4af7b6076c5bc3f"
 root = Path(__file__).resolve().parents[1]
 tools = root / ".tools"
-archive = tools / f"gradle-{VERSION}-bin.zip"
-launcher = tools / f"gradle-{VERSION}" / "bin" / ("gradle.bat" if os.name == "nt" else "gradle")
-
+archive = tools / ("gradle-" + VERSION + "-bin.zip")
+launcher = tools / ("gradle-" + VERSION) / "bin" / ("gradle.bat" if os.name == "nt" else "gradle")
 def digest(path):
-    result = hashlib.sha256()
+    h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            result.update(chunk)
-    return result.hexdigest()
-
+            h.update(chunk)
+    return h.hexdigest()
 if not launcher.exists():
     tools.mkdir(exist_ok=True)
     if not archive.exists() or digest(archive) != SHA256:
         temporary = archive.with_suffix(".download")
-        url = f"https://services.gradle.org/distributions/gradle-{VERSION}-bin.zip"
-        print(f"Downloading pinned Gradle {VERSION}...", flush=True)
+        url = "https://services.gradle.org/distributions/gradle-" + VERSION + "-bin.zip"
+        print("Downloading pinned Gradle " + VERSION, flush=True)
         with urllib.request.urlopen(url, timeout=60) as source, temporary.open("wb") as out:
             while chunk := source.read(1024 * 1024):
                 out.write(chunk)

@@ -1,4 +1,5 @@
 .gradle/
+.tools/
 build/
 run/
 .idea/
@@ -17,3 +18,4 @@ whitelist.json
 banned-*.json
 usercache.json
 .gradle-user-home/
+__pycache__/
