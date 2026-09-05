@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "warland",
+  "version": "${version}",
+  "name": "WarLand",
+  "description": "Военно-политический сервер: экономика, государства и развитие городов.",
+  "authors": ["ProkStudio"],
+  "contact": {"sources": "https://github.com/ProkStudio/WarLand"},
+  "license": "All-Rights-Reserved",
+  "environment": "*",
+  "entrypoints": {"main": ["ru.warland.WarLand"]},
+  "depends": {"fabricloader": ">=0.19.5", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*"}
+}
