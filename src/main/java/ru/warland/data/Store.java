@@ -35,7 +35,7 @@ public final class Store implements AutoCloseable {
         if(c==null) throw new SQLException("Database not ready");
         c.setAutoCommit(false);
         try { T v=work.run(c); c.commit(); return v; }
-        catch(Exception e){c.rollback();throw e;} finally {c.setAutoCommit(true);}
+        catch(Exception|Error e){c.rollback();throw e;} finally {c.setAutoCommit(true);}
     }); }
     public static int update(Connection c,String sql,Object... params) throws SQLException {
         try(PreparedStatement p=c.prepareStatement(sql)){bind(p,params);return p.executeUpdate();}
@@ -52,7 +52,7 @@ public final class Store implements AutoCloseable {
     public static void account(Connection c,String owner)throws SQLException {update(c,"INSERT OR IGNORE INTO accounts(owner,balance) VALUES(?,0)",owner);}
     /** Idempotency is scoped to owner AND operation. Conflicting reuse is rejected. */
     public static boolean change(Connection c,String owner,long delta,String operation,String reason)throws SQLException {
-        if(operation==null||operation.isBlank()||operation.length()>180||Math.abs(delta)>1_000_000_000_000L) throw new SQLException("Invalid ledger operation");
+        if(operation==null||operation.isBlank()||operation.length()>180||delta < -1_000_000_000_000L||delta > 1_000_000_000_000L) throw new SQLException("Invalid ledger operation");
         try(PreparedStatement p=c.prepareStatement("SELECT delta FROM ledger WHERE owner=? AND operation=?")){
             bind(p,owner,operation);try(ResultSet r=p.executeQuery()){if(r.next()){if(r.getLong(1)!=delta)throw new SQLException("Idempotency conflict");return true;}}
         }

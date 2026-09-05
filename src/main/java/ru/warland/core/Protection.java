@@ -10,7 +10,7 @@ import net.minecraft.util.hit.*;
 public final class Protection {
  private Protection(){}
  public static void register(CoreRuntime r){
-  PlayerBlockBreakEvents.BEFORE.register((w,p,pos,state,entity)->!(p instanceof ServerPlayerEntity sp)||r.canBuild(sp,w,pos));
+  PlayerBlockBreakEvents.BEFORE.register((w,p,pos,state,entity)->!(p instanceof ServerPlayerEntity sp)||(w instanceof ServerWorld sw&&r.canBuild(sp,sw,pos)));
   UseBlockCallback.EVENT.register((p,w,hand,hit)->{
    if(!(p instanceof ServerPlayerEntity sp)||!(w instanceof ServerWorld sw))return ActionResult.PASS;
    return r.canBuild(sp,sw,hit.getBlockPos())&&r.canBuild(sp,sw,hit.getBlockPos().offset(hit.getSide()))?ActionResult.PASS:ActionResult.FAIL;
