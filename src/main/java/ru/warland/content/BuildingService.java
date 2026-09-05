@@ -40,7 +40,7 @@ final class BuildingService {
         List<WarLandApi.MenuEntry> entries=new ArrayList<>();
         for(BlockPlan plan:plans.values()) entries.add(ContentFeature.entry(plan.id().equals("depot_v1")?Items.BARREL:Items.SMITHING_TABLE,
                 PlacementRules.name(plan.id())+" · "+store.data().config.price(plan.id())+" монет + все материалы",()->preview(player,plan)));
-        for(var job:store.data().jobs.values()) if(job.owner.equals(player.getUuidAsString())) entries.add(ContentFeature.entry(Items.PAPER,
+        for(var job:store.data().jobs.values().stream().filter(j->j.owner.equals(player.getUuidAsString())).sorted(Comparator.comparingLong((ContentData.Job j)->j.createdAt).reversed()).limit(18).toList()) entries.add(ContentFeature.entry(Items.PAPER,
                 PlacementRules.name(job.plan)+" · "+job.stage+" · "+job.cursor+" блоков",()->jobMenu(player,job.id)));
         entries.add(ContentFeature.entry(Items.BOOK,"Правила: площадка пуста, вход на север, без автоматического возврата",()->api.reply(player,
                 "Стройка только в Верхнем мире. Вход — на север (−Z). Все материалы расходуются по точной ведомости блоков. Готовые здания дают только ванильные рабочие места и хранилища; пассивного дохода нет. Перезапуск требует сверки незавершённых работ.")));
@@ -110,7 +110,7 @@ final class BuildingService {
             BlockPlan plan=plans.get(job.plan);
             if(!plan.fingerprint().equals(job.hash) || job.cursor>plan.cells().size()) { pause(job.id,"Чертёж не совпадает с сохранённой версией.");return; }
             if(job.cursor==plan.cells().size()) { finish(job.id);return; }
-            BlockPos first=at(job,plan.cells().get(job.cursor()));
+            BlockPos first=at(job,plan.cells().get(job.cursor));
             if(!owner.getEntityWorld().isChunkLoaded(first)) continue;
             beginBatch(owner,job,plan);return;
         }
@@ -144,11 +144,11 @@ final class BuildingService {
                 ServerPlayerEntity current=server.getPlayerManager().getPlayer(p.owner);
                 if(!store.ready() || current==null) return;
                 if(error!=null || balance==null || balance<price) { api.reply(current,"Недостаточно денег или хранилище денег недоступно.");return; }
-                if(!eligible(current) || !store.data().config.buildingPurchasesEnabled || !limits(current,p) || !hasMaterials(current,p.plan)) return;
+                if(!eligible(current) || !current.getEntityWorld().getRegistryKey().equals(p.world) || current.squaredDistanceTo(p.origin.getX(),p.origin.getY(),p.origin.getZ())>32*32 || p.expires<System.currentTimeMillis() || !store.data().config.buildingPurchasesEnabled || !limits(current,p) || !hasMaterials(current,p.plan)) return;
                 ContentData.Job job=new ContentData.Job();job.id=UUID.randomUUID().toString();job.owner=p.owner.toString();
                 job.world=p.world.getValue().toString();job.plan=p.plan.id();job.hash=p.plan.fingerprint();job.x=p.origin.getX();job.y=p.origin.getY();job.z=p.origin.getZ();job.price=price;job.createdAt=System.currentTimeMillis();
                 store.change(s->{
-                    if(PlacementRules.ownerCapReached(s,job.owner) || s.jobs.size()>=s.config.maxJobs
+                    if(!s.config.buildingPurchasesEnabled || PlacementRules.ownerCapReached(s,job.owner) || s.jobs.size()>=s.config.maxJobs
                             || s.jobs.values().stream().filter(j->!j.terminal()).count()>=s.config.maxActiveJobs
                             || s.jobs.values().stream().anyMatch(j->!j.terminal() && j.owner.equals(job.owner))) throw new IllegalStateException("Concurrent limit change");
                     var box=PlacementRules.bounds(p.plan,job.x,job.y,job.z);
@@ -181,7 +181,6 @@ final class BuildingService {
         BlockPlan plan=plans.get(job.plan);
         if(!hasMaterials(player,plan)) { api.reply(player,"Оплата уже сохранена. Принесите материалы и нажмите «Продолжить» — повторного платежа не будет.");return; }
         busy.add(id);
-        // This is deliberately an intent, not a claim that inventory and SQLite commit atomically.
         store.change(s->{var j=s.jobs.get(id);if(!j.stage.equals("WAITING_MATERIALS"))throw new IllegalStateException("Unexpected material stage");j.stage="MATERIAL_INTENT";},()-> {
             ServerPlayerEntity current=server.getPlayerManager().getPlayer(player.getUuid());
             if(current==null || !eligible(current) || !hasMaterials(current,plan)) {
@@ -244,7 +243,6 @@ final class BuildingService {
         if(Set.of("CHARGING","PAYMENT_REVIEW","MATERIAL_INTENT","MATERIAL_REVIEW","BATCH","RECOVERY").contains(j.stage)) {api.reply(player,"Сначала персонал должен сверить незавершённую операцию.");return;}
         store.change(s->{var job=s.jobs.get(id);job.stage="ABANDONED";job.problem="Владелец подтвердил отказ без возврата.";},()->{api.audit(j.owner,"building.abandon_no_refund",id);api.reply(player,"Оставлено как есть. Блоки не удалены, возврата нет.");});
     }
-    /** A privileged operator explicitly certifies inventory/world reconciliation; reason is mandatory. */
     void recover(String id,String actor,String reason) {
         if(!store.ready() || !PlacementRules.validReason(reason) || busy.contains(id)) return;
         var job=store.data().jobs.get(id);if(job==null || job.terminal())return;
@@ -285,7 +283,6 @@ final class BuildingService {
         p.getInventory().markDirty();p.currentScreenHandler.sendContentUpdates();
     }
     private void particles(ServerPlayerEntity p,Preview preview) {
-        // Client-only particles: no fake collision blocks or preview entities; 8 corners + 12 edge midpoints.
         var b=PlacementRules.bounds(preview.plan,preview.origin.getX(),preview.origin.getY(),preview.origin.getZ());
         Set<BlockPos> points=new HashSet<>();
         int midX=(b.minX()+b.maxX())/2,midZ=(b.minZ()+b.maxZ())/2,midY=(b.minY()+b.maxY())/2;
