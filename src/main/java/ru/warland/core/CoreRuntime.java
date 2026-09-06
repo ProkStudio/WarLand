@@ -43,7 +43,7 @@ public final class CoreRuntime implements WarLandApi {
  public void initialize(){
   Protection.register(this);CoreCommands.register(this);
   // Content's read-only terminals use an explicit phase before the default protection phase.
-  load("ru.warland.combat.CombatFeature",false);load("ru.warland.content.ContentFeature",false);load("ru.warland.economy.MarketFeature",true);
+  load("ru.warland.combat.CombatFeature",false);load("ru.warland.content.ContentFeature",false);load("ru.warland.economy.MarketFeature",true);load("ru.warland.season.SeasonFeature",false);
   ServerLifecycleEvents.SERVER_STARTED.register(this::start);
   ServerTickEvents.END_SERVER_TICK.register(this::tick);
   ServerLifecycleEvents.SERVER_STOPPING.register(s->{ready=false;for(Feature f:features)try{f.stopped();}catch(Exception e){WarLand.LOG.error("Feature stop failed",e);}store.close();});
