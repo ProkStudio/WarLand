@@ -1,39 +1,33 @@
-# WarLand — автономное продолжение 2026-09-06 23:04 МСК
+# WarLand — точка автономного продолжения
 
-**Обновление около23:16МСК: исправление потери QA-отчётов опубликовано в PR46, CI ещё выполняется. Diagnostic Java clean test build SUCCESS. Новый релиз/установка НЕ выполнены; production остаётсяalpha.3.2.** Полный stable#15 не готов; после окончания диалога фоновая разработка не подразумевается.
+Обновление 2026-09-06 после 23:28 МСК. Агент `release-20260906-2004`, задача #45, координация #12. **Production пока alpha.3.2. Диагностический RTP-прогон PASS; сейчас выполняется отдельная проверка точного опубликованного alpha.3.3. Установка ещё НЕ выполнена.** Stable #15 не готов. Предыдущие срезы доступны в истории этого файла; фоновой разработки после завершения диалога не подразумевается.
 
-## Актуальное состояние
-- ProkStudio/WarLand, main содержит checkpoint, не актуальный игровой исходник.
-- Игровая интеграция `agent/lobby-20260906-1722/fortress-chat-auth`, base `76cd43936f6ee9f369d0fc723bce20e35c5b5de1`.
-- Сервис `warland-alpha`, runtime `/opt/warland-alpha/runtime`, userwarland. Последняя успешная read-only сверка: только productionJVM74932, active3.2; данные/owner/ключи/миры/flags не менялись.
-- alpha.3.3 опубликована(tag512ec576,JAR9819f516); owner-help suitePASS, но установка заблокирована3cold-load RTP отказами. Полные прошлые evidence: OWNER_HELP_STATUS.md. RUN_STATE.md старее этого состояния.
+## Уже сделано
+- Исправлена потеря диагностических отчётов при повторном подключении. PR46 merged `7a114ade57578b2095da128ecce498c560f76b3b` в `agent/lobby-20260906-1722/fortress-chat-auth`.
+- Exact code head `7a3a0a469816d3618d0b3aecfac1a27e10b3f3ab`, CI34057365967 SUCCESS20:16:49UTC. Full Python229PASS (11новых), local9 standalonePASS и32reports/4parallelwriters/128atomicwritesPASS. Отдельные private0600reports, atomic replace/fsync, прежний latestcompatibility; лимиты/число попыток/пароли/packetbodies не менялись.
+- Connector HTTP429 восстановлен после сообщения пользователя23:21. Reconciliation доказала, что прежний runtimeзапрос не выполнился; дубликатов запуска нет.
+- Новая trace-only копия `/opt/warland-build/rtp-cold-20260906-2004`: Java525detected/521passed/4existing skips/0failures/errors; buildSUCCESS2m51s, JAR `a7c411ebc6a8f97519f6a61754d4d4a0bb623826489634cf1daf53309c1d6e01`.
+- Этот диагностический Java patch не входит вPR46/релиз/production: включает только измерения по `-Dwarland.rtpTrace=true`; исходныеlimиты/API/heightmap/terrainpolicy не изменены. Сохранён `logs/trace-source.patch`; local author `/data/warland-2004/diagnose.py`.
+- Mapped API1.21.11 подтверждаетFULL ticketradius0, nonblockinggetOrNull, правильныйheightmap+1.
 
-## Сделано в этой итерации
-- Прочитаны актуальные source, latest coordination#12, checkpoints/PRs/issues и реальное состояние VPS. Собственный агент release-20260906-2004, задача#45, ветка `agent/release-20260906-2004/rtp-cold-load`.
-- Mapped Minecraft1.21.11 bytecode: radius0 ticket действительноFULL; getWorldChunk использует неблокирующий getOrNull; sampleHeightmap возвращает верхний занятыйY, существующий+1 корректен. Причина cold-load пока НЕ установлена.
-- Подготовлен trace-only patch RtpService в собственном checkout `/opt/warland-build/rtp-cold-20260906-2004`: счётчики polls, load ms, max tick gap, stage/surface rejections; включается только `-Dwarland.rtpTrace=true`. Лимиты/политика неизменны. Этот Java patch пока не закоммичен/не входит в PR46/production.
-- Его exact local clean test build завершёнSUCCESS/exit0 за2m51s (последующая успешная сверка). В этот момент дополнительных JVM нет, common build.lock free. JUnit totals/JAR checksum ещё не прочитаны; не подставлять старые числа.
-- Исправлен подтверждённый QA defect: следующий connection перезаписывал единственныйrtp-wire-metrics.json. Новый `rtp_metrics.py` хранит отдельный private report на каждое соединение, атомарно обновляет фазы, сохраняет latestcompatibility,0600,fsync,failclosed наошибке; packet bodies/credentials не добавляет.
--9 standalone tempfile/failure-path tests локальноPASS, syntaxPASS. Ещё2 actual observed_pump integration tests опубликованы дляfullCI. Packet/time/attempt/server limits не менялись.
-- Commit `7a3a0a469816d3618d0b3aecfac1a27e10b3f3ab`, PR https://github.com/ProkStudio/WarLand/pull/46 . Только4Pythonfiles. CI https://github.com/ProkStudio/WarLand/actions/runs/34057365967 — последнее наблюдениеin_progress, неPASS.
+## Диагностический runtime — фактический PASS
+`/opt/warland-build/vanilla-dialog-qa-rtp-trace-2004-v1/result.json`, `logs/trace-runtime-v1.exit=0`.
+-1CPU/640MiB, новыйempty synthetic fixture, неproduction/GUI/load.
+-5загруженныхчанков:3468/2319/2302/2774/2881ms; первые16поверхностей корректно отклоненыFLOOR/HAZARD/HEADROOM; затемNONE иуспешныйRTP. Cold-loadrefusals0.
+-Registration/cancel/invalidaction/auth/pack/PLAY/balance/RTP/repeatdeny/restart/wrongpassword/login/persistedcooldowndenyPASS.
+-Обаshutdown0, errors=[], stableidentity,1account/1startergrant1500/balance1500, SQLite/FKclean. Startup lag7386/8939/13737ms сохранён, не скрыт. Полная пригодность поднагрузкой не доказана.
+-Поэтому не стали вслепую менять ticketAPI/heightmap или ослаблятьбезопасность. Старые3coldloadfailedrun остаютсяevidence, их не заменялиPASS.
 
-## HTTP429 / операции с неопределённым результатом
-VPSconnector периодически возвращаетHTTP429. Первый tracebuild не повторялся и уже подтверждёнSUCCESS. Следующий запрос fetch4Pythonfiles + Pythonfullsuite + trace-runtime получилHTTP429 при подключении; **его исполнение пока не установлено**, слепо не повторять.
+## Текущий исполняемый этап
+Exact publishedalpha3.3 JAR `/opt/warland-build/owner-help-20260906-1858/logs/published/warland-0.1.0-alpha.3.3.jar`, SHA256 `9819f516697e4df1c2ef340dc97f0a343fe9cffa1682dfc00519d5013a389451`; CRC/version проверены. GitHubtag заново прочитан: `512ec576c6496b82ad7c1e1f45d6982547bb8aa2`.
+-Реальныеproductionresources:2CPU/1400MiB. Новый exactgate явно2CPU/1024MiB, а НЕ прежнийstressprofile1CPU/640MiB; лимитывремени/пакетов/terrain/3attempts прежние. Не утверждать, что2CPU доказываетвоспроизводимостьна1CPU илиbeta30.
+-Wrapper81473, `/opt/warland-build/rtp-cold-20260906-2004/logs/accept-published.py`, `logs/run-published.sh`, `logs/published-runtime-v1.{log,exit}`.
+-Output `/opt/warland-build/vanilla-dialog-qa-rtp-published-2004-v1/result.json`; не перезапускатьвсуществующийкаталог. Сверитьresult/exit/2cycles/profile/JAR/childprocesses передновымдействием.
+-Common build.lock удерживаетсяреальнымQA; послеfinish проверитьrelease. DeploymentLOCK пока не брали.
 
-Проверить read-only перед дальнейшим запуском:
-- `logs/python-metrics.exit`, `logs/python-metrics.log`;
-- `logs/trace-runtime-v1.exit`, `logs/trace-runtime-v1.log`, `logs/trace-runtime-driver.log`;
-- `/opt/warland-build/vanilla-dialog-qa-rtp-trace-2004-v1` иresult.json;
-- собственные wrappers/JVM, common `/opt/warland-build/build.lock`, loopback25591/18101.
-Если файлы/процессы отсутствуют иlockfree — тогда один новый запуск. Если работают — не дублировать; еслиfailed — сохранитьevidence/разобрать, невыдаватьPASS. Runtime helper timeout420s, Python180s; тестовый исходникemptyfixture `/opt/warland-build/release-qa/final-runtime`, неproduction. Trace build logs `logs/trace-build.{log,exit}`. Local authored `/data/warland-2004/diagnose.py` иновыеPythonfiles сохранены.
+## До установки
+ТолькоеслиexactgatePASS: новаяown deploymentкопия (не изменять прежнийfaileddriver), явно привязаннаякновомууспешномуRTPresult истаромуточномуowner-helpPASS. Проверить0игроков/unit/oldJARhash; privatefullbackup+archivereadback; code-onlyswap с сохранениемidentity/owner/accounts/worlds; ready/version/help/cancelpostchecks иcode-onlyrollback, неоткатБД.
 
-GitHub vps-build/isolated-rtp-qa reservation остаётся до безопасной reconciliation, хотя последний фактически проверенныйOSlock былсвободен. DeploymentLOCK не брали, serverrestart/swap не выполняли.
+Production `warland-alpha.service`, `/opt/warland-alpha/runtime`, userwarland, JAR3.2ac515284; не изменялся. Owner-help3.3 ужеpublished, ноещёненаlive. Предыдущаяполнаяистория: OWNER_HELP_STATUS.md, PLAYER_EXPERIENCE_STATUS.md, RELEASE_CONTINUATION.md; RUN_STATE.mdстарый.
 
-## Далее
-1. Дождаться/прочитать CI PR46, проверить exacthead/base/diff, merge только QA files приPASS.
-2. Reconcile VPSоперацию; собрать redacted trace cold-generation и surface rejection вновомsynthetic fixture, контролируемо сравнить1CPU/640MiB с ресурсамиVPS, без отключенияsafe bounds.
-3. Причину исправить сregression; приJava изменении новаяверсия, неoverwrite3.3. PositiveRTP/repeat/restart/auth/help/datainvariants дляточногоопубликованногоJAR обязательны.
-4. До установки zero-online/servicebinding/privatebackup+readback/code-onlyrollback, сохраняющий новыеplayeractions; failedgate не обходить.
-5. Обновить этот файл/#12, снять только собственные locks после проверки. Не закрыватьstable#15 или чужие задачи.
-
-Auth-chat/изолированноеlobby/крепость/TAB/HUD/market+inventorycrashsafety/gameplay/load ещёнезавершены. Секреты/identity.bin/БД/миры/реальныеUUID/архивы не публиковать. Старыеworlds/accounts/dirtyworktrees/evidence не удалять.
+Auth-chat/lobby/fortress/TAB/HUD/market+inventorycrashsafety/gameplay/load иstable#15 открыты. Не менять чужиеclaims/dirtyworktrees, не удалятьworlds/accounts/backup/evidence, не публиковатьсекреты/identity.bin/БД/миры/реальныеUUID. Сохранятьчестныерезультаты иследующийшаг, не объявлятьstableиз-заодногоPASS.
