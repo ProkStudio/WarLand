@@ -1,0 +1,74 @@
+name: Publish owner chat help patch
+on:
+  push:
+    branches: ['release/0.1.0-alpha.3.3']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: owner-help-alpha-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify exact release sources
+        run: |
+          set -euo pipefail
+          python3 tools/build.py clean test build
+          PYTHONPATH=tools python3 -m unittest discover -s tools/tests -v
+          mkdir dist
+          cp build/libs/warland-0.1.0-alpha.3.3.jar dist/
+          cp build/libs/warland-0.1.0-alpha.3.3-sources.jar dist/
+          cp docs/OWNER_HELP_RELEASE.md dist/
+          printf '%s\n' "$GITHUB_SHA" > dist/SOURCE_COMMIT
+          (cd dist && sha256sum warland-*.jar OWNER_HELP_RELEASE.md SOURCE_COMMIT > SHA256SUMS && sha256sum -c SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: owner-help-alpha-patch
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owner-help-verification-${{ github.sha }}
+          path: build/test-results/test/*.xml
+          if-no-files-found: warn
+  publish:
+    if: github.ref == 'refs/heads/release/0.1.0-alpha.3.3'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: owner-help-alpha-patch
+          path: dist
+      - name: Publish new prerelease without replacing history
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c SHA256SUMS)
+          test "$(cat dist/SOURCE_COMMIT)" = "$GITHUB_SHA"
+          if gh release view v0.1.0-alpha.3.3 >/dev/null 2>&1; then
+            echo 'Release already exists; refusing overwrite.'
+            exit 1
+          fi
+          gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/v0.1.0-alpha.3.3 -f sha="$GITHUB_SHA" >/dev/null
+          gh release create v0.1.0-alpha.3.3 dist/* --verify-tag --prerelease --title 'WarLand 0.1.0-alpha.3.3 — справка владельца в чате' --notes-file docs/OWNER_HELP_RELEASE.md
