@@ -24,6 +24,7 @@ public final class VehicleStore {
             if(closed)return;
             if(error!=null){failed=true;busy=false;return;}
             try {
+                if(raw!=null&&(raw.isBlank()||raw.length()>1_000_000))throw new IllegalArgumentException("Invalid fleet document size");
                 Fleet loaded=raw==null?Fleet.empty():JSON.fromJson(raw,Fleet.class);
                 if(loaded==null)throw new IllegalArgumentException("Null fleet");
                 // Quarantine all interrupted deployments BEFORE accepting a new command.
