@@ -2,6 +2,9 @@ package ru.warland.war;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import ru.warland.WarLand;
 import ru.warland.core.GameConfig;
 import ru.warland.data.Store;
@@ -20,14 +23,23 @@ public final class WarService {
     private final GameConfig config;
     private final NationsService nations;
     private final WarRepository repository;
+    private final Predicate<ServerPlayerEntity> authorized;
     private volatile WarRepository.Snapshot cache = new WarRepository.Snapshot(List.of(), Map.of());
     private final CaptureProgress progress = new CaptureProgress();
     private final Set<CaptureKey> capturing = new HashSet<>();
     private final Set<String> settling = new HashSet<>();
 
+    /** Compatibility constructor: without explicit live authorization, all player actions fail closed. */
     public WarService(Store db, GameConfig config, NationsService nations) {
+        this(db, config, nations, actor -> () -> false, player -> false);
+    }
+
+    public WarService(Store db, GameConfig config, NationsService nations,
+                      Function<UUID, BooleanSupplier> actorLeases,
+                      Predicate<ServerPlayerEntity> authorized) {
         this.config = config; this.nations = nations;
-        repository = new WarRepository(db, config, System::currentTimeMillis);
+        this.authorized = Objects.requireNonNull(authorized, "player authorization");
+        repository = new WarRepository(db, config, System::currentTimeMillis, actorLeases);
     }
     public List<War> wars() { return cache.wars(); }
     public String windowLabel(War war) { Schedule value=cache.schedules().get(war.id()); return value==null?"Расписание недоступно":value.label(); }
@@ -54,7 +66,8 @@ public final class WarService {
     /** Call only after the command/UI's explicit destructive-action confirmation. */
     public CompletableFuture<String> surrender(UUID player, String target) { return update(repository.surrender(player, target)); }
     private CompletableFuture<String> update(CompletableFuture<String> result) {
-        return result.thenCompose(message -> refresh().thenApply(v -> message));
+        // A cancelled observer must not suppress publication of an already committed mutation.
+        return result.thenCompose(message -> refresh().thenApply(v -> message)).copy();
     }
 
     /** Once per second; snapshots only, no chunk loading/scanning and no JDBC on the server thread. */
@@ -64,6 +77,8 @@ public final class WarService {
         Map<String, Integer> online = new HashMap<>();
         Map<Location, Set<String>> occupants = new HashMap<>();
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            // Pending/revoked sessions must not affect capture, contest or offline-protection counts.
+            if (!authorized.test(player)) continue;
             var member = nations.member(player.getUuid());
             if (member == null || !player.isAlive() || player.isCreative() || player.isSpectator()) continue;
             var pos = player.getBlockPos();

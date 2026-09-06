@@ -39,7 +39,7 @@ public final class CoreRuntime implements WarLandApi {
  public CoreRuntime()throws Exception{
   INSTANCE=this;Path game=FabricLoader.getInstance().getGameDir();dir=game.resolve("warland");
   config=GameConfig.load(FabricLoader.getInstance().getConfigDir().resolve("warland/core.json"));
-  store=new Store(dir.resolve("warland.db"));nations=new NationsService(store,config,this::actionLease);wars=new WarService(store,config,nations);auth=new AuthRuntime(this);
+  store=new Store(dir.resolve("warland.db"));nations=new NationsService(store,config,this::actionLease);wars=new WarService(store,config,nations,this::actionLease,this::online);auth=new AuthRuntime(this);
  }
  public void initialize(){
   auth.initialize();Protection.register(this);CoreCommands.register(this);
