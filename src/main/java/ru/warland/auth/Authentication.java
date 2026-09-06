@@ -90,7 +90,13 @@ public final class Authentication implements AutoCloseable {
         Arrays.fill(input, '\0');
         try {
             Passwords.validate(secret);
-            return action.apply(secret).exceptionally(error -> Result.DENIED).whenComplete((v, e) -> Arrays.fill(secret, '\0'));
+            // Never expose the cleanup stage: cancelling a dependent skips its whenComplete action.
+            CompletableFuture<Result> exposed = new CompletableFuture<>();
+            action.apply(secret).whenComplete((value, error) -> {
+                Arrays.fill(secret, '\0');
+                exposed.complete(error == null && value == Result.SUCCESS ? Result.SUCCESS : Result.DENIED);
+            });
+            return exposed;
         } catch (RuntimeException invalid) {
             if (secret != null) Arrays.fill(secret, '\0');
             return denied();
