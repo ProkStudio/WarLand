@@ -1,6 +1,6 @@
 # WarLand — согласованные изменения игрового входа и оформления
 
-2026-09-06 20:22 МСК: ответы владельца получены; продолжение подтверждено в20:42. Исходная база b4f7d222f7b97393babde6762f977c0df303faff. **Обновление после21:32МСК: RTP опубликован и установлен вalpha.3.2; остальные пункты ниже остаются в работе.** Актуальный release/deployment checkpoint: [RELEASE_CONTINUATION.md](RELEASE_CONTINUATION.md).
+Ответы владельца получены 2026-09-06 в20:22 МСК; продолжение подтверждено в20:42 и21:54. **Статус после22:26: RTP установлен вalpha.3.2; owner chat help реализован и опубликован вalpha.3.3, но установка3.3 заблокирована RTP-приёмкой.** Подробности: [RELEASE_CONTINUATION.md](RELEASE_CONTINUATION.md), [OWNER_HELP_STATUS.md](OWNER_HELP_STATUS.md).
 
 ## Точное ТЗ
 - Обычный Minecraft Java1.21.11. Игрок сначала видит изолированное лобби, вводит /register или /login через чат. Существующие аккаунты/пароли сохраняются; никаких прав/инвентаря/экономики/профиля до успешной аутентификации. Пароли не должны попадать в серверные журналы, чат, suggestions или audit. Пользователь предупреждён о локальной истории обычного клиента.
@@ -12,16 +12,17 @@
 - Админка через чат: объяснить ВСЕ фактически доступные владельцу команды с примерами. Не строить /admin GUI вместо запрошенных команд; не выдавать незавершённые функции за рабочие.
 
 ## Текущее состояние
-- Production0.1.0-alpha.3.2 ready18:32:39UTC. PR41 merged вagent/lobby-20260906-1722/fortress-chat-auth; release tag2c13ebad, installed JARac515284. Подробные hashes/backup/rollback/tests в RELEASE_CONTINUATION.md.
-- RTP runtime проверен на exact downloaded release artifact: успех, repeat denial, cooldown denial послеrestart/login, баланс/аккаунт сохранены. Production code swap проверен поhash/ready/version/identity/data/cancel-only auth probe; graphical пользовательская приёмка не подменяется synthetic wire.
-- При холодной генерации RTP может безопасно отмениться по4сек лимиту; повторить через30сек. Первый такой FAILED QA сохранён. Остальные cooldown180сек после успешного RTP переживаютreconnect/restart.
-- **Auth-chat, изолированное лобби до proof, lobby-on-every-join, крепость/TAB/HUD/owner help ещё НЕ реализованы и не установлены этой итерацией.** Вход пока через прежнюю native форму.
-- Реальный owner уже bound; приdeployment identity/baseline auth_owner сохранены. Не выдавать новыйbootstrap, не менятьвладельца и не требовать повторной регистрации.
-- Исходные/старые dirty checkout сохранены безreset/clean; новый RTP worktree /opt/warland-build/release-20260906-1806-rtp. Для следующей задачи создавать отдельную копию от свежей интеграции и проверятьCLAIM/LOCK.
+- Production0.1.0-alpha.3.2,ready18:32:39UTC; source2c13ebad,installed JARac515284. Аккаунты/миры/ключ/owner сохранены. Подробная история backup/rollback — в основномконспекте.
+- Для3.2 ранее прошла положительная exact-artifact RTP-проверка, повтор и cooldown после restart. При холодной генерации всё ещё возможны безопасные отказы; это открытая проблема воспроизводимости/производительности, не завершённая load-приёмка.
+- **Owner help выполнен в исходниках и alpha.3.3:** `/wladmin`, `/wladmin help [страница]`,27 записей с примерами/ограничениями и действующими правами. Точный опубликованный JAR прошёл native non-owner/seeded-owner/auth/help/restart/no-data-change suite.
+- **Owner help ещё не на рабочем сервере:** RTP regression3.3 получил3 bounded cold-load отказа; положительный перенос/restart для этого JAR не подтверждён. Версия3.2 оставлена без изменений; prepared deployment не запускался. Код RTP(10classes) идентичен3.2.
+- **Auth-chat, изолированное лобби до proof, lobby-on-every-join, крепость/TAB/HUD ещё НЕ реализованы этой итерацией.** Вход пока через прежнюю native-форму. Графическая приёмка UI/мира остаётся отдельным gate.
+- Реальный owner уже bound. Не выдавать новый bootstrap, не менять владельца, не требовать повторной регистрации.
+- PR41/42/43/44 merged в `agent/lobby-20260906-1722/fortress-chat-auth`, текущий head76cd439. Main — docs-first; не путать его с релизным source. Старые dirty worktrees сохранены без reset/clean. Собственный help/QA checkout `/opt/warland-build/owner-help-20260906-1858`; точные ветки/логи в OWNER_HELP_STATUS.
 
 ## Gates до установки следующих изменений
 Auth lobby must not hydrate/save real player inventory/stats/world data or expose powers before proof; duplicate connection must not evict owner. Reuse existing KDF/rate limits/nonce/transport and identity, deny all non-auth effects. Test wrong/successful password, retries, timeout, duplicate/reconnect/restart, secret canaries in logs, profile/starter exactly-once, no pre-auth data writes, current vanilla graphical flow.
 
 Build/test under `/opt/warland-build/build.lock`; production service-specific zero-online preflight, private full runtime backup under backup lock, ready+version+data checks and code-only rollback without overwriting newer player state. UI/world require actual visual inspection, not just compilation. Existing release tags/assets must not be overwritten. Full stable#15 and unrelated gameplay work are not automatically complete.
 
-Сохранять результаты/ошибки/коммиты по мере выполнения. Координация#12. Не публиковать пароли,bootstrap,identity.bin,БД,playerdata или приватныеархивы. Не обещать фоновую работу после окончаниядиалога.
+Сохранять результаты/ошибки/коммиты по мере выполнения. Координация#12. Не публиковать пароли,bootstrap,identity.bin,БД,playerdata или приватные архивы. Не обещать фоновую работу после окончания диалога.

@@ -1,41 +1,29 @@
 # WarLand — актуальная точка продолжения
 
-**2026-09-06: alpha.3.2 опубликована И установлена. Полный stable#15 НЕ готов.** Конспект сохранён по запросу владельца для возобновления после обрыва, не означает фоновую разработку после окончания чата.
+**2026-09-06, после 22:26 МСК: alpha.3.3 опубликована, но НЕ установлена. Рабочий сервер остаётся на alpha.3.2. Полный stable#15 не готов.** Конспект сохранён по просьбе владельца для возобновления после обрыва; это не обещание фоновой разработки после чата.
 
-[Полный неизменяемый снимок этого этапа: тесты, ошибки, пути, ограничения и rollback](https://github.com/ProkStudio/WarLand/blob/ccd7c93887eeafca42df427928b75cf5e8578546/RELEASE_CONTINUATION.md). Ниже — окончательный статус; в подробном снимке PR42 ещё ожидалCI, теперь он тожеmerged.
+## Что сделано последним
+Реализована справка владельца в чате: `/wladmin`, `/wladmin help [страница]`,27 описаний с примерами и ограничениями,7 страниц при всех подключённых модулях. Существующие права и подкоманды сохранены; примеры не исполняются. PR43 и диагностический QA-only PR44 merged.
 
-## Игроку
-- `201.51.10.116:25565`, обычный Minecraft Java1.21.11, клиентские моды не нужны, прежний ресурспак скачивается штатно.
-- `/rtp` теперь работает: бесплатно, безопасная суша Верхнего мира1000–3000блоков от спавна,180сек между переносами, cooldown сохраняется послеreconnect/restart. Не двигаться во время подготовки; бой/урон/опасность/техника/inventory-lock/параллельныйwarp отменяют запрос.
-- Холодный чанк может не загрузиться за4сек: безопасная отмена, повторять не раньше30сек. Ограничение предотвращает накопление работы, но не гарантирует отсутствие лагов.
-- Авторизация пока прежней native-формой, НЕ чатом. Реальные аккаунты/пароли/owner сохранены; повторныйbootstrap не нужен. Поле пароля не маскируется — использовать отдельный парольWarLand.
+[Релиз alpha.3.3](https://github.com/ProkStudio/WarLand/releases/tag/v0.1.0-alpha.3.3) — серверный prerelease-патч, не новый installer. Source/tag `512ec576c6496b82ad7c1e1f45d6982547bb8aa2`, executable SHA256 `9819f516697e4df1c2ef340dc97f0a343fe9cffa1682dfc00519d5013a389451`. Сборка/публикация CI прошла, скачанные assets проверены, точный JAR прошёл auth/owner-help runtime.
 
-## Релиз и интеграция
-- [v0.1.0-alpha.3.2](https://github.com/ProkStudio/WarLand/releases/tag/v0.1.0-alpha.3.2): prerelease,5assets(executable,sources,SHA256SUMS,SOURCE_COMMIT,notes). Это серверныйpatch, не новыйfull installer.
-- Фактический lightweight tag/SOURCE_COMMIT `2c13ebad2dde95b1f0398820005e38a8e9a9414b`, ветка `release/0.1.0-alpha.3.2`. Release metadata target_commitish может показыватьmain; проверять именноtag ref.
-- Установленный executable SHA256 `ac5152842d6b1f7ac240474771333672fb2d31f4e3f4a09255b90592de429a99`.
-- Release CI[34051393160](https://github.com/ProkStudio/WarLand/actions/runs/34051393160): build+publish SUCCESS. Скачанныеchecksums/source/tag/version/CRC сверены. Старыеtags/assets не заменены; platform immutable=false, workflow сам отказывается отoverwrite.
-- [PR41](https://github.com/ProkStudio/WarLand/pull/41) merged как`ff97667a1fc3d335dd46796e2a2126bc45bdea18`: RTP реализация+startup wiring+tests.
-- [PR42](https://github.com/ProkStudio/WarLand/pull/42) merged как`d0fbfeabf60957db222f9874fbf05694993fed20`: QA-only helper. Exact helper284ccca CI[34051937581](https://github.com/ProkStudio/WarLand/actions/runs/34051937581) SUCCESS18:33:28UTC. Это НЕ изменение опубликованногоJAR/tag.
-- Свежая dev-интеграция: `agent/lobby-20260906-1722/fortress-chat-auth` at`d0fbfeabf60957db222f9874fbf05694993fed20`. Main по-прежнемуdocs-first; PR40 конфликтный — не делатьслепойmerge.
+**Установка остановлена проверками:** RTP regression сначала исчерпал лимит тестового клиента; диагностический прогон с явными конечными бюджетами затем получил3 безопасных отказа загрузки холодных чанков. Успешный перенос и cooldown после restart для этого опубликованного JAR НЕ подтверждены. Повторы не запускались бесконечно до «зелёного» результата.10 RTP class-файлов идентичны установленной3.2; это не доказательство изменения RTP-кода чат-справкой. Причину холодной загрузки ещё нужно измерить.
 
-## Доказательства
-- Java21 clean build:513detected/509passed/4прежнихregistry skips/0failures/errors; Python210/210. Предрелизныйexactab67785 CI34051168112 SUCCESS;223trackedfiles byte-matched.
-- Настоящие isolated Fabric/native vanilla-wire suites: cancel/stale/invalid authentication, registration→pack/hash/CRC→PLAY/balance, успешныйRTP→repeat denial→graceful restart→wrong-password denial→login→persisted-cooldown denial. Стабильныйключ, однастартоваявыплата1500/balance1500,SQLite/FK clean,shutdown0/errors=[],безpasswordcanaries.
-- Exact downloaded3.2artifact v2 PASS: landing(-1591.5,72,-2135.5),repeat/restartcooldowndenied. Первыйpublishedv1 FAILED из-за предусмотренногоcold-loadtimeout; evidenceнеудалён. Новыйhelper распознаёт только этототказ, проверяетno position/cooldown change,ждёт30сек,максимум3попытки и всёравно требуетреальныйуспех. **Успешныйv2 наблюдал0отказов: retry-path им НЕ покрыт.**
-- WireQA НЕGUI/externalbeta/load/полныйlive-negative/crashmatrix. Terrain/lease negatives — pure/SQLite/source tests. Cold-start/world-load warnings7–9сексохранены. Дополнительныеподробности/старыеfailedruns — вснимке выше.
+Полная текущая доказательная база и следующий шаг: [OWNER_HELP_STATUS.md](OWNER_HELP_STATUS.md).
 
-## Production и откат
-- `/opt/warland-ops/rtp-alpha32-20260906/result.json`:success=true/phasecomplete/deploy.exit0/rollback_used=false.
-- Доrestart0игроков; service-boundpreflight. `warland-alpha.service`active/running,запуск18:32:16UTC,ready18:32:39UTC,version3.2,protocol774,ровно1WarLandexecutable/hashсовпадает.
-- Privatebackup `/var/backups/warland-rtp-alpha32-20260906-183205/runtime.tar.gz`,SHA256`ec14f318b03812beac6127a33cd341bc379242171ffcbaf49b852459082f970f`;tarread-backcomparisonPASS. **BootedrestoreименноэтогоархиваНЕзаявляется**;раннийalpha3bootedrestoreописанвRUN_STATE.md.
-- identity_preserved/baseline_rows_preserved=true(profiles/auth_accounts/accounts/ledger/auth_owner),SQLite/FKclean. Productioncancel-onlyprobe:NONEdialog/cancelPASS,безсозданияаккаунта.Startuperrors=[];QA/buildJVMнет,commonOSlocksсвободны;DONE/UNLOCKв#12опубликован.
-- Толькоcode-swap;config/worlds/accounts/owner/keys/незавершённыеflagsнеизменялись.СтарыйJAR:`runtime/retired-rtp-alpha32-20260906-183205/warland-0.1.0-alpha.3.1.jar`.
-- Rollback:gracefulstopтолькоэтогосервиса,сохранить3.2внемods,вернутьединственныйстарый3.1JAR,start+проверки. **НевосстанавливатьстаруюБД/миры поверхновыхдействийигроков.** Повторновыполненныйdeploy.pyне запускать:existingresult.jsonнамеренноблокируетповтор.
+## Рабочий сервер — не перепутать с последним опубликованным релизом
+- `201.51.10.116:25565`, обычный Minecraft Java1.21.11, без клиентских модов, прежний обязательный ресурспак.
+- Установлена **0.1.0-alpha.3.2**; service `warland-alpha.service` active/running, запуск18:32:16UTC, ready18:32:39UTC. В последней проверке0игроков; новых QA/build JVM нет, OS locks свободны.
+- JAR SHA256 `ac5152842d6b1f7ac240474771333672fb2d31f4e3f4a09255b90592de429a99`; source/tag `2c13ebad2dde95b1f0398820005e38a8e9a9414b`.
+- `/rtp` бесплатно, безопасная суша1000–3000 блоков от спавна, cooldown180сек после успешного переноса. Холодная загрузка может безопасно отказать; повтор не раньше30сек. Для3.2 ранее отдельная успешная runtime-приёмка сохранена.
+- Вход пока через native-форму, НЕ чат. Реальный owner уже привязан; аккаунты/пароли/ключи/миры сохранены. Не назначать нового owner/OP по нику и не требовать bootstrap заново.
+- Backup установленной3.2: `/var/backups/warland-rtp-alpha32-20260906-183205/runtime.tar.gz`, SHA256 `ec14f318b03812beac6127a33cd341bc379242171ffcbaf49b852459082f970f`. Tar read-back comparison, не booted restore именно этого архива.
+- [Подробная история развёртывания3.2 и code-only rollback](https://github.com/ProkStudio/WarLand/blob/ccd7c93887eeafca42df427928b75cf5e8578546/RELEASE_CONTINUATION.md). Никогда не откатывать старые БД/миры поверх новых действий игроков.
 
-## Следующие шаги
-1. Следовать[PLAYER_EXPERIENCE_STATUS.md](PLAYER_EXPERIENCE_STATUS.md):auth-chatсизоляциейдоproof,lobbyнакаждыйвход,крепость160×160,TAB[OWNER],sidebarсденьгами,ownercommandhelp. **RTPсделан;остальныепунктыэтойитерациейНЕсделаны.**
-2. Отдельнаяаккуратнаяинтеграцияsourceвmainссохранениемcheckpoint,непереписываяисторию.
-3. Дальшеinventory/marketcrash-safety,purchases/capture,полнаямодерация/авиация,реальныеbeta10/20/30иstable#15. Невключатьопасныеflagsради«релиза».
+## Продолжение
+1. Диагностировать холодные чанки RTP в изоляции: ticket/генерация/доступность/CPU/heap и отбор поверхности. Не отключать safety-гейты и не ослаблять серверные лимиты ради PASS. План в OWNER_HELP_STATUS.
+2. Затем положительная приёмка точного release JAR: RTP + repeat denial + restart cooldown, auth/help, сохранность данных. Лишь после неё отдельный deployment LOCK,0игроков, private backup, code-only swap и postchecks.
+3. Остальное согласованное ТЗ: [PLAYER_EXPERIENCE_STATUS.md](PLAYER_EXPERIENCE_STATUS.md) — изолированная chat-auth, лобби на каждый вход, крепость160×160, TAB[OWNER], sidebar с деньгами. Эти части ещё не готовы.
+4. Main остаётся docs-first; PR40 конфликтный. Dev-интеграция `agent/lobby-20260906-1722/fortress-chat-auth` at`76cd43936f6ee9f369d0fc723bce20e35c5b5de1`. Не делать слепой merge/reset. Market/inventory crash-safety, прочая gameplay-интеграция, beta/load и stable#15 отдельно.
 
-Owncheckout `/opt/warland-build/release-20260906-1806-rtp`;logs/{build-v2,python-v2,runtime-v1,rtp-runtime-v1,rtp-published-v2}.exit=0;rtp-published-v1.exit=1сохранён;logs/published/verified.jsonиreleaseassetsнаместе. Точныеprivateevidencepaths—вподробномснимке. Старыеdirtyworktrees/архивы/ключинечистить. Передпродолжениемчитатьсвежий#12/PR/CI,новаязадачавотдельнойкопии,одинheavyjobподbuild.lock;deploymentподbackup.lock. Пароли/bootstrap/identity.bin/БД/миры/playerdata/архивывGitHubнепубликовать.
+Перед новой работой читать свежий#12/PR/CI, сохранять чужие dirty worktrees, брать общий build.lock для одного heavy job. Реальный владелец/данные не тестовый fixture. Пароли,bootstrap,identity.bin,БД,миры,playerdata и приватные архивы не публиковать.
