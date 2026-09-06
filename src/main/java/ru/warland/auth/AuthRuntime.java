@@ -97,7 +97,7 @@ public final class AuthRuntime implements AutoCloseable {
                     || !connection.isEncrypted() || !s.identity.nonce().equals(request.nonce) || !request.valid()) {
                 handler.disconnect(DENIED); return;
             }
-            if (!s.busy.compareAndSet(false, true)) return; // bounded before queueing onto any other executor
+            if (!s.busy.compareAndSet(false, true)) return;
             CompletableFuture<Authentication.Result> result = request.registration
                     ? engine.register(s.identity, request.password(), request.ownerToken(), System.currentTimeMillis())
                     : engine.login(s.identity, request.password());
@@ -121,7 +121,6 @@ public final class AuthRuntime implements AutoCloseable {
         return !closed && runtime.ready() && c.isOpen() && sessions.get(c) == s
                 && (s.released ? engine.authenticated(s.identity) : System.nanoTime() - s.opened < TimeUnit.SECONDS.toNanos(120));
     }
-    /** Called once at JOIN, only after the configuration task has durably authenticated. */
     public boolean attach(ServerPlayerEntity player) {
         Session s = sessions.get(connection(player.networkHandler));
         if (s == null || !s.released || !s.identity.player().equals(player.getUuid()) || !engine.authenticated(s.identity)) return false;
@@ -155,7 +154,10 @@ public final class AuthRuntime implements AutoCloseable {
     }
     private void remove(ClientConnection c, Session s) { if (sessions.remove(c, s)) engine.disconnect(s.identity); }
     public boolean console(ServerCommandSource source) {
-        return !closed && runtime.ready() && RuntimePolicy.console(((AuthSourceAccess) source).warland$output(), runtime.server(), source.getEntity() != null);
+        AuthSourceAccess access = (AuthSourceAccess) source;
+        boolean ownerPermissions = source.getPermissions().hasPermission(new net.minecraft.command.permission.Permission.Level(net.minecraft.command.permission.PermissionLevel.OWNERS));
+        return !closed && runtime.ready() && RuntimePolicy.provisioningContext(access.warland$silent(), ownerPermissions)
+                && RuntimePolicy.console(access.warland$output(), runtime.server(), source.getEntity() != null);
     }
     private int provision(ServerCommandSource source) {
         if (!console(source) || !provisioning.compareAndSet(false, true)) return 0;

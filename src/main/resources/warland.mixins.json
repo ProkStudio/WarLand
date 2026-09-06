@@ -2,7 +2,27 @@
   "required": true,
   "package": "ru.warland.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["BlockItemMixin", "ExplosionMixin", "PistonMixin", "FluidMixin", "FireMixin", "EndPortalMixin", "AuthCommonAccess", "AuthSourceAccess", "AuthConnectionMixin", "AuthCommonMixin", "AuthPlayMixin", "AuthPlayerMixin", "AuthPickupMixin", "AuthModerationMixin"],
-  "client": ["AuthClientConnectionAccess"],
-  "injectors": {"defaultRequire": 1}
+  "mixins": [
+    "BlockItemMixin",
+    "ExplosionMixin",
+    "PistonMixin",
+    "FluidMixin",
+    "FireMixin",
+    "EndPortalMixin",
+    "AuthCommonAccess",
+    "AuthSourceAccess",
+    "AuthConnectionMixin",
+    "AuthConfigurationMixin",
+    "AuthCommonMixin",
+    "AuthPlayMixin",
+    "AuthPlayerMixin",
+    "AuthPickupMixin",
+    "AuthModerationMixin"
+  ],
+  "client": [
+    "AuthClientConnectionAccess"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }
