@@ -56,7 +56,7 @@ public final class CombatFeature implements Feature {
         }
         RIFLE=GUNS.get("ak74");
         var key=RegistryKey.of(RegistryKeys.ITEM,Identifier.of("warland","magazine_545"));
-        MAGAZINE=Registry.register(Registries.ITEM,key,new Item(new Item.Settings().registryKey(key).maxCount(16)));
+        MAGAZINE=Registry.register(Registries.ITEM,key,new eu.pb4.polymer.core.api.item.SimplePolymerItem(new Item.Settings().registryKey(key).maxCount(16),net.minecraft.item.Items.PAPER,true));
     }
     @Override public void initialize(WarLandApi api){
         registerItems();this.api=api;instance=this;vehicles.initialize(api);
@@ -156,8 +156,8 @@ public final class CombatFeature implements Feature {
         }
     }
     @Override public void stopped(){vehicles.stopped();reloads.clear();nextShot.clear();instance=null;}
-    private static final class GunItem extends Item {
-        final String id;GunItem(Settings settings,String id){super(settings);this.id=id;}
+    private static final class GunItem extends eu.pb4.polymer.core.api.item.SimplePolymerItem {
+        final String id;GunItem(Settings settings,String id){super(settings,net.minecraft.item.Items.CROSSBOW,true);this.id=id;}
         @Override public ActionResult use(World world,PlayerEntity player,Hand hand){if(world.isClient())return ActionResult.SUCCESS;return instance!=null&&player instanceof ServerPlayerEntity p?instance.use(p,hand,id):ActionResult.FAIL;}
     }
 }
