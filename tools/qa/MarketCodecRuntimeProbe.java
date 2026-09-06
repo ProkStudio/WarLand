@@ -43,7 +43,12 @@ public final class MarketCodecRuntimeProbe implements ModInitializer {
                 sword.addEnchantment(server.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getOrThrow(Enchantments.UNBREAKING), 2);
                 var container = new ItemStack(Items.SHULKER_BOX);
                 container.set(DataComponentTypes.CONTAINER, ContainerComponent.fromStacks(List.of(named.copy(), sword.copy())));
-                List<ItemStack> examples = List.of(stone, named, sword, container);
+                var pearls = new ItemStack(Items.ENDER_PEARL, 16);
+                var overridden = new ItemStack(Items.STONE, 99);
+                overridden.set(DataComponentTypes.MAX_STACK_SIZE, 99);
+                var single = new ItemStack(Items.STICK, 1);
+                single.set(DataComponentTypes.MAX_STACK_SIZE, 1);
+                List<ItemStack> examples = List.of(stone, named, sword, container, pearls, overridden, single);
                 List<String> envelopes = new ArrayList<>();
                 for (int i = 0; i < examples.size(); i++) {
                     step = "roundtrip-" + i;
@@ -57,11 +62,19 @@ public final class MarketCodecRuntimeProbe implements ModInitializer {
                     rejects(() -> codec.restore(stored.replace("\"schema\":1", "\"schema\":2")));
                     rejects(() -> codec.restore(stored.replace("\"minecraft\":\"1.21.11\"", "\"minecraft\":\"1.21.10\"")));
                     rejects(() -> codec.restore(stored.replace("\"count\":", "\"extra\":true,\"count\":")));
+                    rejects(() -> codec.restore(stored.replace("\"count\":", "\"count\":1,\"count\":")));
+                    rejects(() -> codec.restore(stored.replace("\"max_count\":", "\"max_count\":0,\"shadow\":")));
                 }
                 step = "invalid-input";
                 rejects(() -> codec.restore("x".repeat(65537)));
                 rejects(() -> codec.restore("[".repeat(33) + "0" + "]".repeat(33)));
                 rejects(() -> codec.encode(new ItemStack(Items.STONE, 65)));
+                rejects(() -> codec.restore(envelopes.getFirst().replace("minecraft:stone", "minecraft:unknown_codec_probe_item")));
+                try { codec.restore("private-synthetic-canary-not-for-diagnostics"); throw new AssertionError("accepted bad input"); }
+                catch (IllegalArgumentException expected) {
+                    check(expected.getMessage().equals("Invalid, lossy or oversized market item"));
+                    check(expected.getCause() == null);
+                }
                 step = "real-stack-plans";
                 var slots = new ArrayList<ItemStack>(Collections.nCopies(41, ItemStack.EMPTY));
                 slots.set(0, named.copy()); slots.set(40, sword.copy());
@@ -78,6 +91,7 @@ public final class MarketCodecRuntimeProbe implements ModInitializer {
                 Path marker = FabricLoader.getInstance().getGameDir().resolve("codec-probe-envelopes.txt");
                 if (Files.exists(marker, LinkOption.NOFOLLOW_LINKS)) {
                     if (!Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)) throw new IllegalStateException("Unsafe probe marker");
+                    if (Files.size(marker) > 1024 * 1024) throw new IllegalStateException("Oversized probe marker");
                     List<String> previous = Files.readAllLines(marker);
                     check(previous.equals(envelopes));
                     for (int i = 0; i < examples.size(); i++) check(ItemStack.areEqual(examples.get(i), codec.restore(previous.get(i))));
