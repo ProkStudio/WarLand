@@ -11,7 +11,9 @@ public final class RuntimePolicy {
     public static boolean credentialCommand(String command) {
         if (command == null || command.length() > 256) return true;
         // Also catch nested /execute ... run login and namespace/alias variants. No parser echoes input.
-        for (String word : command.toLowerCase(Locale.ROOT).split("\s+")) {
+        var words = new java.util.StringTokenizer(command.toLowerCase(Locale.ROOT));
+        while (words.hasMoreTokens()) {
+            String word = words.nextToken();
             while (word.startsWith("/")) word = word.substring(1);
             int colon = word.lastIndexOf(':');
             if (SECRET_ROOTS.contains(word.substring(colon + 1))) return true;

@@ -8,7 +8,7 @@
   "contact": {"sources": "https://github.com/ProkStudio/WarLand"},
   "license": "All-Rights-Reserved",
   "environment": "*",
-  "entrypoints": {"main": ["ru.warland.WarLand"]},
+  "entrypoints": {"main": ["ru.warland.WarLand"], "client": ["ru.warland.auth.client.AuthClient"]},
   "mixins": ["warland.mixins.json"],
   "depends": {"fabricloader": ">=0.19.5", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*"}
 }
