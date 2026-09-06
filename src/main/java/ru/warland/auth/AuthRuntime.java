@@ -50,7 +50,7 @@ public final class AuthRuntime implements AutoCloseable {
         net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> !(entity instanceof ServerPlayerEntity p) || runtime.authorized(p));
         net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> !(entity instanceof ServerPlayerEntity p) || runtime.authorized(p));
         net.fabricmc.fabric.api.event.player.UseItemCallback.EVENT.register((player, world, hand) -> player instanceof ServerPlayerEntity p && !runtime.authorized(p) ? net.minecraft.util.ActionResult.FAIL : net.minecraft.util.ActionResult.PASS);
-        ServerConfigurationConnectionEvents.BEFORE_CONFIGURE.register(this::configure);
+        ConfigurationOrder.beforeDefaults(ServerConfigurationConnectionEvents.BEFORE_CONFIGURE, this::configure);
         ServerConfigurationConnectionEvents.DISCONNECT.register((h, s) -> disconnect(h));
         ServerPlayConnectionEvents.DISCONNECT.register((h, s) -> disconnect(h));
         ServerConfigurationNetworking.registerGlobalReceiver(AuthPayloads.Request.ID, (p, context) -> receive(context.networkHandler(), p));
