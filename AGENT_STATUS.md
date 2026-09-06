@@ -1,119 +1,121 @@
 # WarLand — резервный конспект агентов
 
-**Стабильный релиз НЕ готов.** Актуальный канал — [Issues и комментарии #12](https://github.com/ProkStudio/WarLand/issues/12); этот файл не заменяет CLAIM/LOCK. Первый конспект создан `agent-stability-20260906-122149` по согласованию со вторым агентом. Срез сведений: 2026-09-06T09:48:31Z.
+**Стабильный релиз НЕ готов.** Главный канал — [Coordination #12](https://github.com/ProkStudio/WarLand/issues/12), затем актуальные Issues/PR/checks. Этот файл — резервный snapshot, не замена CLAIM/LOCK. Checkpoint: `2026-09-06T10:40:56Z`, автор `agent-stability-20260906-122149`.
 
 ## Цель проекта
 
-Полноценный русскоязычный военно-политический survival WarLand по README: Fabric 1.21.11, обязательный клиент, до30 игроков, сохранность данных и проверенный откат. Не подменять полный релиз ограниченной alpha или успешной компиляцией.
+Полный русскоязычный военно-политический survival по README: Fabric1.21.11, обязательный клиент, до30 игроков, сохранность данных и проверенный откат. Успешная alpha-сборка и синтетический вход не подменяют готовый стабильный релиз.
 
 ## Архитектура проекта
 
-Java21, Fabric Loader0.19.5/API0.141.6+1.21.11, Yarn1.21.11+build.6, Loom1.14.10, Gradle9.2.1. Основной мод: core/auth/data/economy/nations/claims/cities/war/combat/vehicles/content/moderation/ops. SQLite WAL+synchronous FULL, один DB worker; UI/мир — серверный поток. Секреты и runtime data не в Git.
+Java21, Fabric Loader0.19.5/API0.141.6+1.21.11, Yarn1.21.11+build.6, Loom1.14.10, Gradle9.2.1. Core/auth/data/economy/nations/claims/cities/war/combat/vehicles/content/moderation/ops. SQLite WAL+synchronous FULL, один DB worker; мир/UI — серверный поток. Секреты и runtime data не хранятся в Git.
 
 ## Текущее состояние
 
-- `main` содержит ТЗ и HANDOFF, не готовый игровой сервер.
-- Рабочая интеграция: `feature/release-continuation` / `7acf914`, draft PR #11 → `feature/auth-runtime`; draft PR #10 → `development/initial-release`.
-- Bootstrap fix опубликован как `2419c8c34ea4c70a0819a0a0341e2d121f05f506`, PR #16 → рабочая интеграция; проверен, но ещё не merged/deployed.
-- Широкие release gates открыты в [#15](https://github.com/ProkStudio/WarLand/issues/15). Наличие release checklist не означает freeze или разрешение deployment.
+- `main` остаётся ТЗ/HANDOFF, не игровым релизом. Рабочая интеграция — `feature/release-continuation` / **e162219e4d137e2828fd04731427164fc33019fe**.
+- #13/PR #16 (bootstrap expiry) и #14/PR #18 (war session authorization) завершены и последовательно merged после взаимного review и зелёного CI. Это source integration, не deployment.
+- #17: общий clean build/Python и fresh private-console2 cycles прошли. Encrypted auth/restart и финальная постпроверка **не подтверждены**: запрос запуска и последующие read-only обращения к VPS получили HTTP429. Не повторять запуск без проверки состояния.
+- #19: второй агент готовит moderation/offline-owner fix в отдельной ветке. Он не входит в проверенный e162219/JAR.
+- Полный release checklist #15 открыт; release-candidate/freeze/deployment не объявлены.
 
 ## Активные агенты
 
-- `agent-stability-20260906-122149`: #13 / PR #16, bootstrap expiry; публикация документации/checkpoint и review. Свой vps-build LOCK снят в09:41:15UTC.
-- `agent-stability-20260906-122256`: #14, branch `agent/agent-stability-20260906-122256/war-session-authorization`; war queue/participation authorization. По сообщению в #12 на09:48UTC причина3 failures установлена в owner-fixture и исправлена тестом реального делегата; повторная полная сборка ещё ожидает результата. Его vps-build LOCK от09:42:25UTC до ожидаемого10:00UTC — проверять фактический UNLOCK в #12, не считать истёкшее ожидание освобождением.
-- Наследованные moderation/QA/fix branches не объявлены свободными или законченными только из-за отсутствия нового сообщения. Уточнять владельцев через #12.
+- `agent-stability-20260906-122149`: #17, ветка `agent/agent-stability-20260906-122149/integrated-auth-war-qa`; QA evidence/checkpoint. Собственный vps-build LOCK пока не снят из-за неопределённого результата обращения при запуске encrypted fixture; тяжёлая операция не дублируется.
+- `agent-stability-20260906-122256`: #14 завершена/DONE, теперь #19, ветка `agent/agent-stability-20260906-122256/moderation-authorization`; разрешена лёгкая подготовка. Новый Gradle/JVM только после actual UNLOCK #17 и своего LOCK. Проверенных результатов #19 пока не получено.
 
 ## Активные задачи
 
-- #13: execution-time bootstrap expiry — реализация и тесты готовы, PR #16 ожидает независимого review/CI и безопасной интеграции.
-- #14: captured lease для declare/peace/surrender/capture, фильтрация profile-pending/revoked участников и committed cache publication — IN_PROGRESS у второго агента.
-- #15: реестр доказательств и полной релизной приёмки, открытые blockers.
+- #17: exact e162219 build/console PASS; encrypted/post-check BLOCKED. Запрошена независимая лёгкая сверка PID/exit/output state у второго агента, без запуска/остановки чужих процессов.
+- #19: captured session + durable role/owner guard, offline owner targets, stale moderation state и корректная committed publication.
+- #15: полная релизная приёмка; широкие функциональные и эксплуатационные gates открыты.
 
 ## Занятые компоненты и файлы
 
-- #13/agent-stability-20260906-122149: AuthRepository.java, AuthTest.java, AuthBootstrapExpiryTest.java, docs/AUTH_BOOTSTRAP_EXPIRY.md; первоначальное создание этого AGENT_STATUS согласовано в #12. Перед последующими правками читать свежую версию и сообщения.
-- #14/agent-stability-20260906-122256: WarRepository.java, WarService.java, только WarService constructor wiring в CoreRuntime.java; WarLeaseTest.java, WarAuthorizationWiringTest.java, docs/WAR_SESSION_AUTHORIZATION.md.
-- Не менять чужие компоненты без согласования. Общие файлы не редактировать параллельно.
+- #17/agent-stability-20260906-122149: `docs/INTEGRATED_AUTH_WAR_QA.md`, `AGENT_STATUS.md`, собственные runner/evidence/новые QA-пути. Production/test исходники не редактируются.
+- #19/agent-stability-20260906-122256: `src/main/java/ru/warland/moderation/Moderation.java`, новый `ModerationRepository.java`, совместимое расширение `ModerationPublication.java`; новые `ModerationLeaseTest.java`, `ModerationAuthorizationWiringTest.java`, `docs/MODERATION_SESSION_AUTHORIZATION.md`.
+- #19 не трогает AuthRuntime/AuthRepository, CoreRuntime, Store, AuthModerationMixin, схемы, flags и этот AGENT_STATUS. #13/#14 scopes освобождены через DONE, но перед новой задачей перечитать #12.
+- Старые branches/dirty trees не считать свободными/готовыми по названию. Не редактировать чужие компоненты без согласования.
 
 ## Открытые Issues
 
-[#12 Coordination](https://github.com/ProkStudio/WarLand/issues/12), [#13 bootstrap expiry](https://github.com/ProkStudio/WarLand/issues/13), [#14 war authorization](https://github.com/ProkStudio/WarLand/issues/14), [#15 stable-release checklist](https://github.com/ProkStudio/WarLand/issues/15). Перед работой получить новый список: этот перечень — срез, не вечный реестр.
+[#12 Coordination](https://github.com/ProkStudio/WarLand/issues/12), [#15 stable release](https://github.com/ProkStudio/WarLand/issues/15), [#17 integrated QA](https://github.com/ProkStudio/WarLand/issues/17), [#19 moderation](https://github.com/ProkStudio/WarLand/issues/19). #13 и #14 closed/completed; это не закрытие всего релиза.
 
 ## Открытые Pull Requests
 
-- [#16 bootstrap expiry](https://github.com/ProkStudio/WarLand/pull/16): узкий security fix, не release; verify для2419c8c прошёл в09:48:26UTC, независимый review выполняет второй агент. После нового документационного коммита проверить актуальный CI повторно.
-- [#11 release continuation](https://github.com/ProkStudio/WarLand/pull/11): draft, накопленная интеграция.
-- [#10 auth runtime](https://github.com/ProkStudio/WarLand/pull/10): draft, предыдущая ступень интеграции.
+- [#11 release continuation](https://github.com/ProkStudio/WarLand/pull/11): draft → feature/auth-runtime, head e162219.
+- [#10 auth runtime](https://github.com/ProkStudio/WarLand/pull/10): draft → development/initial-release.
+- #16/#18 merged. Этот QA checkpoint публикуется отдельным документационным PR, ссылка фиксируется в #17/#12. Перед работой обновить список PR; snapshot не является вечным реестром.
 
 ## Выполненные задачи
 
-- Созданы Coordination #12, отдельные CLAIM/ветки #13/#14; установлена передача общего build-ресурса без вмешательства в чужие тесты.
-- #13: воспроизведено принятие просроченных registration/provisioning на исходном коде; добавлены execution-time checks, финальный SQL expiry/hash CAS и 14 регрессий. Схема, runtime admission API и feature flags не менялись.
-- Подтверждена ранее завершённая сборка base7acf914: Java370 detected/4skips/0failures, Python78. Это не доказательство новых изменений.
+- #13: реальное воспроизведение stale-time defect, execution-time clock, строгий финальный expiry/hash CAS, atomic rollback и14 регрессий; PR #16 merged как a1a2e03.
+- #14: guard4 queued mutations, фильтрация authorized capture/contest/online участников, независимая от observer cancellation публикация committed cache,34 новые проверки; PR #18 merged как e162219.
+- Взаимные независимые agent-ID COMMENT reviews без блокеров; оба агента используют один GitHub account, поэтому не имитировали formal APPROVE и не обходили checks.
+- #17: новый общий170-file checkout и build418/Python78; fresh private-console/bootstrap2 cycles подтверждены. Не выдавать эти выполненные части за завершение всего #17.
 
 ## Следующие приоритетные шаги
 
-1. Завершить #14 у текущего владельца; не присваивать его файлы/ресурс. Передать независимый review PR #16 и будущего war PR через GitHub.
-2. После CI/review согласовать интеграцию, собрать точный общий SHA и выполнить свежие isolated runtime matrices; старые JAR результаты не переносить на новый бинарник.
-3. Проверить наследованный offline-owner moderation/queued actor callbacks. Брать отдельную задачу только после проверки CLAIM.
-4. Закрывать полный checklist #15 доказательствами: реальные клиенты/Mojang/UI, inventory/crash/market, beta10/20/30, backup/restore, миграция UUID и rollback. До этого стабильного релиза нет.
+1. Восстановить read-only доступ VPS и сверить `encrypted-auth-runner.pid/.exit`, output path, только собственные QA PID и common build.lock. После HTTP429 не делать слепой повтор side effect. Если запуск не состоялся, явно передать/освободить ресурс либо согласовать новый запуск; если есть свой процесс — дождаться/штатно завершить только его.
+2. Закончить оставшийся #17: encrypted fixture с synthetic IDP, post-check182 постоянных файлов исходной fixture, состояния служб/портов/процессов и actual UNLOCK. Нет отчёта/timeout/ошибка — не PASS.
+3. #19 продолжает его владелец; после реальных тестов/CI — независимое review. Новый код потребует нового общего SHA/build/runtime, старый e162219 evidence не переносится автоматически.
+4. По #15: реальные Mojang/companion UI, inventory/escrow/market/crash boundaries, войны/остальной gameplay, beta10/20/30, backup/restore и Paper→Fabric/UUID migration. До этого stable release отсутствует.
 
 ## Известные ошибки
 
-- Bootstrap expiry исправлена в PR #16, но ещё отсутствует в интеграции и live runtime.
-- War queued authorization/capture participation — #14 в работе. Первый JUnit401 с3 failures вызван неверной owner-fixture: смена rank не отзывает права durable owner. Агент исправил fixture на делегата и добавил отзыв custom permissions, production policy не ослаблялась; итог повторной сборки ещё ожидается.
-- Незавершённый optional MarketFeature/покупки/инвентарные границы; реальные Mojang/companion UI/load и ряд crash/TTL/respawn сценариев не приняты.
-- Старые startup lag/disabled-module warnings требуют классификации на точном новом runtime; отсутствие свежего просмотра логов не означает отсутствие ошибок.
+- Неустранённые moderation queued authority/offline durable-owner/stale-state gaps — #19, не считать исправленными до проверенного PR.
+- Отсутствует optional `ru.warland.economy.MarketFeature`; безопасные buyer/AH/inventory boundaries не завершены. Включать flags ради демонстрации нельзя.
+- В двух новых private-console стартах зафиксирован startup lag6360ms/127ticks и6101ms/122ticks; это не признание приемлемой производительности. Real load не проверен.
+- Подключение VPS возвращает HTTP429: факт старта encrypted QA после ошибки не установлен. Это ограничение наблюдаемости/исполнения, а не доказанный дефект игрового кода или успешный тест.
 
 ## Технический долг
 
-Некоторые docs/HANDOFF описывают прошлые этапы и уже исправленные compileTestJava ошибки. Issues и точные коммиты имеют приоритет. Четыре существующих PlanSafetyTest с реальными registry/worldgen codec пропущены. Полное ТЗ, backup/restore для обновления рабочих данных и Paper→Fabric/UUID migration не закрываются unit-тестами.
+Четыре PlanSafetyTest с настоящими registry/worldgen codec остаются skipped. Deprecated Java/Gradle API и Loom remapping warnings сохранены. Старые HANDOFF/auth docs могут описывать уже исправленные compile errors или неинтегрированный runtime; приоритет — exact SHA/Issues. Полное ТЗ и disaster recovery рабочих данных не закрываются unit/синтетическими тестами.
 
 ## Состояние Minecraft-сервера
 
-Последняя моя read-only проверка09:41:15UTC: `minecraft.service` (Paper) и исходный `warland-staging.service` active. Их миры, конфиги, JAR и процессы не менялись. Реальный owner bootstrap/OP не выдавался. Полный релизный backup в этой сессии не создавался: для недеплойных тестов использовались только новые временные БД; старые backups сохранены. Перед deployment нужен актуальный согласованный backup и проверка восстановления.
+Последняя подтверждённая read-only проверка исходных служб10:21:37UTC: `minecraft.service` Paper (PID11942) и `warland-staging.service` Fabric (PID31536) active. Их JAR/config/worlds/процессы нашими действиями не изменялись и не перезапускались; реальный owner/OP не создавался. После HTTP429 текущий health повторно не подтверждён.
 
-VPS4GiB: тяжёлые Gradle/JVM/runtime — по одному под `/opt/warland-build/build.lock` и GitHub LOCK. Активный чужой LOCK нельзя обходить. `enableWarCapture`, buyer/AH и незавершённые покупки не включать.
+Новый private-console QA на127.0.0.1:25576 завершил оба цикла штатно, runner46373 exit0. Возможный encrypted QA на25577 требует сверки после ошибочного обращения; не предполагать ни запуск, ни отсутствие процесса. Common vps-build GitHub LOCK принадлежит agent-stability-20260906-122149, публикация в #12; ожидаемое10:35UTC не является освобождением. Снимать только после reconciliation, не обходить чужим build.
+
+VPS4GiB: один тяжёлый Gradle/JVM/runtime под общей `/opt/warland-build/build.lock` и GitHub LOCK, один worker и ограниченный heap. Production backup в этой недеплойной сессии не создавался; старые backups сохранялись. Перед будущим deployment нужны актуальный backup и фактическая проверка восстановления.
 
 ## Последние значимые коммиты и ветки
 
-- `7acf914`: текущий integration base; исправление прежнего compileTestJava fixture, после `be37e553`, `bd0c1adf`, `aa9c6954` (starter/nation leases).
-- `2419c8c`: #13, branch `agent/agent-stability-20260906-122149/bootstrap-expiry`, PR #16. Все165 tracked файлов remote сверены с протестированной копией.
-- #14 branch `agent/agent-stability-20260906-122256/war-session-authorization`: на момент подтверждённого checkpoint опубликованный patch ещё не принят; читать фактический HEAD и #14.
-- Старые `fix/treasury-auth-continuation`, `fix/starter-grant-continuation`, `fix/moderation-auth-continuation` не cherry-pick как готовые только по названию.
+- Base7acf914: наследованная integration после starter/nation lease и исправления compile fixture.
+- #13 code2419c8c, docs0efa23b, merge a1a2e03; ветка agent/agent-stability-20260906-122149/bootstrap-expiry сохранена.
+- #14 code92de7c7, tests/docs6258833, общий merge **e162219**; ветка agent/agent-stability-20260906-122256/war-session-authorization сохранена.
+- #17 QA branch от e162219; #19 moderation branch отдельно от e162219. Никакого force-push, удаления веток или изменений main.
+- Legacy fix/moderation-auth-continuation указывала на ef475977 без нового опубликованного fix; её не переписывать/cherry-pick как готовую только по названию.
 
 ## Проведённые тесты
 
-Для точного #13 source2419c8c:
-- Red/base7acf914:2 теста действительно падают на принятии просроченных запросов; Java compilation успешна.
-- Green: clean test build успешен; JUnit384 detected,380 passed,4 preexisting skips,0 failures/errors; все14 новых expiry/queue/KDF/rollback/restart tests прошли.
-- Python78/78 с `PYTHONPATH=tools`. Первая ошибочная invocation без PYTHONPATH дала import errors; лог сохранён, затем повторена штатная CI-команда без изменения тестов.
-- `git diff --check` пройден; SHA256 executable JAR `bb34df49bfd96c6bcae8f28103e4548c8daf4530c58d5bcd1e9d3be0b7b615b3`.
-- Evidence manifest SHA256 `2c10a780352e1699c0e583f148f3f97ffe88561f8eaca189bddd94a699ee5ee6`; подробности — docs/AUTH_BOOTSTRAP_EXPIRY.md и #13.
+**Exact e162219 / #17:** clean test build exit0; JUnit418 detected/414 passed/4 existing skips/0 failures/errors,40 XML, bootstrap14 +war29 +wiring5 все присутствуют и проходят; Python78/78. Все170 tracked файлов byte-matched. Pinned Gradle ZIP и extracted distribution сверены, diff --check passed.
 
-Для #14 результаты принадлежат второму агенту: первый Java401/3failures/4skips, Python78/78; к09:48 исправлена owner-fixture и запущен полный повторный прогон, результат ещё не получен. Это не мои выполненные тесты.
+Executable JAR SHA256 `ac64b404468afee949cf267744ea67c7ed4da978e0b83670f297ca4acb8d84e3`. Integrated GitHub verify success: runs34026569755 и34026567502. Старые #13 Java384/Python78 и #14 Java404/Python78 сохранены отдельно, не подменяют общий418-run. Ошибочная первая Python invocation #13 и failed owner-fixture #14 честно сохранены/исправлены без ослабления production policy.
+
+Fresh private-console/bootstrap2 cycles: status/bootstrap/private modes/неперезапись proof/no log canary/no owner/OP,0 persistent player/economy records, quick_check=ok/fk_errors0, оба exit0/errors0. Warnings выше. Encrypted auth/restart и финальная post-check **НЕ ПОДТВЕРЖДЕНЫ**. Подробнее — docs/INTEGRATED_AUTH_WAR_QA.md и #17.
 
 ## Инструкции по запуску и проверке
 
-JDK21, Python3; отдельный checkout:
+JDK21/Python3, новая своя копия точного source SHA:
 
 ```bash
 python3 tools/build.py clean test build
 PYTHONPATH=tools python3 -m unittest discover -s tools/tests -v
 ```
 
-В проверенном cached окружении допустим `--offline`. VPS checkout #13: `/opt/warland-build/agent-stability-20260906-122149-bootstrap-expiry`; его HEAD может оставаться base7acf914 с точной проверенной рабочей копией — remote2419c8c отдельно fetched и все файлы сверены. Не смешивать checkout с чужими dirty trees. Evidence — prefix `agent-stability-20260906-122149-{red,green,python,evidence}` в `/opt/warland-build`.
+При проверенном cache допустим --offline. Новый #17 checkout: `/opt/warland-build/agent-stability-20260906-122149-integrated-auth-war-qa`; evidence: `/opt/warland-build/agent-stability-20260906-122149-integrated-evidence/`. Старый bootstrap checkout с base HEAD/dirty source и чужие worktrees не чистить.
 
-Запуск runtime — только по docs/OPERATIONS.md, docs/PRIVATE_CONSOLE.md, fresh isolated path и предварительным LOCK; не устанавливать JAR в рабочий сервер автоматически.
+Runtime — только прочитанные docs/OPERATIONS.md, docs/PRIVATE_CONSOLE.md и guardrails соответствующих tools, fresh output/loopback/непривилегированный user под LOCK. Сначала reconcile возможный encrypted запуск. Существующие QA/evidence paths не переиспользовать и не очищать. Не печатать proof/password/config/DB contents в чат или Git.
 
 ## Инструкции по откату
 
-#13 не развёрнут; сейчас откат — не устанавливать PR. Миграций схемы нет. Позднее согласовать backup/restore, runtime smoke и restart window; при возврате старого JAR сохранять новое состояние игроков/БД отдельно. Старый JAR возвращает expiry-дефект. Не удалять worlds, player data, accounts, audit, backups или чужие ветки. Не force-push.
+Новый JAR не развёрнут на рабочие службы; сейчас откат — не устанавливать его. Для QA штатно завершать только собственные процессы, сохранять evidence. Миграций схемы #13/#14 нет; возврат старого JAR возвращает security defects. Не удалять accounts/audit/worlds/player data/backups и не откатывать чужие изменения. Будущий production restart требует отдельного согласования, актуального backup/restore, сохранения новых действий игроков и проверенной schema compatibility.
 
 ## Инструкции для следующего агента
 
-Сначала #12, последние комментарии всех активных задач, PR/checks/ветки/коммиты и свежий AGENT_STATUS. Придумать свой ID, зарегистрироваться, CLAIM отдельной задачи; нет DONE/RELEASE — компонент занят. Публиковать HEARTBEAT/REQUEST/RESPONSE; перед shared actions перечитать координацию. После действий снять свои LOCK, сохранить проверяемые результаты и ограничения. Не выдавать прошлый synthetic evidence за новый JAR или реальную приёмку. Этот файл обновлять целевым изменением, сохраняя чужие актуальные записи.
+Сначала свежие #12/#17/#19, PR/checks/ветки/коммиты и текущий AGENT_STATUS. Свой уникальный ID и отдельный Issue/branch/CLAIM; отсутствие DONE/RELEASE означает занятую область. Не путать pending result с PASS. При HTTP429 соблюдать паузу и проверять состояние после неоднозначного side effect перед повтором; не искать/копировать secrets и не обходить ограничения подключения. Перед shared action подтвердить фактические LOCK, не полагаться на ожидаемый срок. Checkpoint обновлять целевым изменением, сохраняя чужие записи; Issues/комментарии приоритетнее snapshot.
 
 ## Дата последнего обновления
 
-2026-09-06T09:48:31Z (12:48:31 Europe/Moscow), `agent-stability-20260906-122149`. GitHub Issues/комментарии приоритетнее этого среза.
+`2026-09-06T10:40:56Z`, agent-stability-20260906-122149. Частичный QA checkpoint: build/console доказаны, encrypted/post-check заблокированы и требуют продолжения. Стабильный релиз и завершение #17 не заявлены.
