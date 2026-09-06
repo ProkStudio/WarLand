@@ -4,6 +4,7 @@ import java.nio.file.*;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.BooleanSupplier;
 
 /** One database worker, short transactions, no JDBC on Minecraft's tick thread. */
 public final class Store implements AutoCloseable {
@@ -31,7 +32,13 @@ public final class Store implements AutoCloseable {
         try { worker.execute(() -> { try {out.complete(work.run(connection));} catch(Throwable e){out.completeExceptionally(e);} }); }
         catch(RejectedExecutionException e){out.completeExceptionally(e);} return out;
     }
-    public <T> CompletableFuture<T> tx(Work<T> work) { return submit(c -> {
+    /** Explicit system/offline transaction; user actions must provide a captured lease. */
+    public <T> CompletableFuture<T> tx(Work<T> work) { return tx(() -> true, work); }
+    /** Admission is linearized on the worker, not at enqueue or post-commit publication. */
+    public <T> CompletableFuture<T> tx(BooleanSupplier lease, Work<T> work) {
+        Objects.requireNonNull(lease,"lease"); Objects.requireNonNull(work,"work");
+        return submit(c -> {
+        if(!lease.getAsBoolean()) throw new CancellationException("Player session expired before operation");
         if(c==null) throw new SQLException("Database not ready");
         c.setAutoCommit(false);
         try { T v=work.run(c); c.commit(); return v; }
@@ -61,6 +68,26 @@ public final class Store implements AutoCloseable {
         if(n==0)return false;
         update(c,"INSERT INTO ledger(owner,delta,operation,reason,created) VALUES(?,?,?,?,?)",owner,delta,operation,reason,System.currentTimeMillis()); return true;
     }
+    /** A starter receipt records the original grant, not today's configurable amount. */
+    public static boolean grantStarter(Connection c,UUID id,long amount)throws SQLException {
+        Objects.requireNonNull(id,"id");
+        if(amount<0||amount>1_000_000_000_000L)throw new SQLException("Invalid starter amount");
+        String owner=player(id),operation="starter:"+id;
+        try(PreparedStatement p=c.prepareStatement("SELECT owner,delta,reason FROM ledger WHERE operation=?")){
+            bind(p,operation);
+            try(ResultSet r=p.executeQuery()){
+                if(r.next()){
+                    if(!owner.equals(r.getString(1))||r.getLong(2)<0||r.getLong(2)>1_000_000_000_000L
+                            ||!"starter-grant".equals(r.getString(3))||r.next())
+                        throw new SQLException("Invalid starter receipt");
+                    if(scalar(c,"SELECT COUNT(*) FROM accounts WHERE owner=?",owner)!=1)
+                        throw new SQLException("Starter wallet is missing");
+                    return true;
+                }
+            }
+        }
+        return change(c,owner,amount,operation,"starter-grant");
+    }
     public CompletableFuture<Long> balance(UUID id){return submit(c -> scalar(c,"SELECT balance FROM accounts WHERE owner=?",player(id)));}
     public CompletableFuture<Boolean> money(UUID id,long delta,String op,String reason){return tx(c -> change(c,player(id),delta,op,reason));}
     public CompletableFuture<String> state(String ns,String key){return submit(c -> string(c,"SELECT json FROM state WHERE namespace=? AND key=?",ns,key));}
@@ -74,6 +101,7 @@ public final class Store implements AutoCloseable {
     private static final String[] SCHEMA={
         "CREATE TABLE IF NOT EXISTS accounts(owner TEXT PRIMARY KEY,balance INTEGER NOT NULL CHECK(balance BETWEEN 0 AND 1000000000000))",
         "CREATE TABLE IF NOT EXISTS ledger(id INTEGER PRIMARY KEY AUTOINCREMENT,owner TEXT NOT NULL,delta INTEGER NOT NULL,operation TEXT NOT NULL,reason TEXT NOT NULL,created INTEGER NOT NULL,UNIQUE(owner,operation))",
+        "CREATE INDEX IF NOT EXISTS ledger_operation ON ledger(operation)",
         "CREATE TRIGGER IF NOT EXISTS immutable_ledger_update BEFORE UPDATE ON ledger BEGIN SELECT RAISE(ABORT,'immutable ledger'); END",
         "CREATE TRIGGER IF NOT EXISTS immutable_ledger_delete BEFORE DELETE ON ledger BEGIN SELECT RAISE(ABORT,'immutable ledger'); END",
         "CREATE TABLE IF NOT EXISTS state(namespace TEXT NOT NULL,key TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(namespace,key))",
