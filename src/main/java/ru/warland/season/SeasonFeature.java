@@ -74,6 +74,9 @@ public final class SeasonFeature implements Feature {
     private boolean owner(ServerCommandSource source) { return api.staff(source, "owner"); }
     private int schedule(ServerCommandSource source, String id, String date, String reason) {
         if (!owner(source) || !ready(source)) return 0;
+        if (!id.matches("[a-z0-9][a-z0-9_-]{2,31}")) {
+            source.sendError(Text.literal("Идентификатор: 3–32 символа a–z, 0–9, _ или -, начиная с буквы/цифры.")); return 0;
+        }
         final long start;
         try {
             if (!date.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) throw new IllegalArgumentException();
