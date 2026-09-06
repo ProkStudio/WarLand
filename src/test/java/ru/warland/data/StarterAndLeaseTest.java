@@ -56,6 +56,21 @@ class StarterAndLeaseTest {
   assertInstanceOf(SQLException.class,root(assertThrows(Exception.class,()->grant(player,9000))));
   assertEquals(0,scalar("SELECT COUNT(*) FROM accounts"));
  }
+ @Test void corruptHistoricalDeltaIsRejected()throws Exception{
+  for(long delta:new long[]{-1,1_000_000_000_001L}){
+   UUID id=UUID.randomUUID();
+   await(db.tx(c->{Store.account(c,Store.player(id));return Store.update(c,"INSERT INTO ledger(owner,delta,operation,reason,created) VALUES(?,?,?,'starter-grant',1)",Store.player(id),delta,"starter:"+id);}));
+   assertInstanceOf(SQLException.class,root(assertThrows(Exception.class,()->grant(id,1500))));
+   assertEquals(0,await(db.balance(id)).longValue());
+  }
+ }
+ @Test void duplicateStarterOperationAcrossOwnersFailsClosed()throws Exception{
+  assertTrue(grant(player,1500));UUID other=UUID.randomUUID();
+  assertTrue(await(db.money(other,20,"starter:"+player,"starter-grant")));
+  assertInstanceOf(SQLException.class,root(assertThrows(Exception.class,()->grant(player,9000))));
+  assertEquals(1500,await(db.balance(player)).longValue());
+  assertEquals(2,scalar("SELECT COUNT(*) FROM ledger WHERE operation=?","starter:"+player));
+ }
  @Test void genericIdempotencyStillRejectsDifferentDelta()throws Exception{
   assertTrue(await(db.money(player,20,"generic","test")));
   assertInstanceOf(SQLException.class,root(assertThrows(Exception.class,()->await(db.money(player,21,"generic","test")))));
@@ -92,7 +107,8 @@ class StarterAndLeaseTest {
  }
  @Test void admittedCommitIsNotDiscardedByLaterRevocation()throws Exception{
   AtomicBoolean valid=new AtomicBoolean(true);
-  assertTrue(await(db.tx(valid::get,c->{valid.set(false);return Store.change(c,Store.player(player),100,"admitted","test");})));
+  boolean committed=await(db.tx(valid::get,c->{valid.set(false);return Store.change(c,Store.player(player),100,"admitted","test");}));
+  assertTrue(committed);
   assertEquals(100,await(db.balance(player)).longValue());assertFalse(valid.get());
  }
  @Test void throwingLeaseCannotWriteAndDoesNotPoisonWorker()throws Exception{
