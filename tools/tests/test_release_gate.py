@@ -13,7 +13,8 @@ class ReleaseGateTests(unittest.TestCase):
         (self.root/'config/warland').mkdir(parents=True)
         (self.root/'server.properties').write_text('online-mode=true\nserver-ip=127.0.0.1\n')
         (self.root/'config/warland/core.json').write_text(json.dumps({'schemaVersion':1,'requireOnlineModeForPublic':True,'mobilizationHours':12}))
-        self.jar=self.root/'warland.jar'
+        (self.root/'mods').mkdir()
+        self.jar=self.root/'mods/warland.jar'
         with zipfile.ZipFile(self.jar,'w') as jar:jar.writestr('fabric.mod.json',json.dumps({'id':'warland','depends':{'minecraft':'1.21.11'}}))
         self.data={'schema':1,'artifact_sha256':sha256(self.jar),'recorded_at':self.now.isoformat(),
                    'gates':{key:{'passed':True,'evidence':'synthetic fixture only','verified_by':'unit test'} for key in GATES}}
