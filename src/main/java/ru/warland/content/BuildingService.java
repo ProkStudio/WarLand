@@ -43,14 +43,29 @@ final class BuildingService {
         for(var job:store.data().jobs.values().stream().filter(j->j.owner.equals(player.getUuidAsString())).sorted(Comparator.comparingLong((ContentData.Job j)->j.createdAt).reversed()).limit(18).toList()) entries.add(ContentFeature.entry(Items.PAPER,
                 PlacementRules.name(job.plan)+" · "+job.stage+" · "+job.cursor+" блоков",()->jobMenu(player,job.id)));
         entries.add(ContentFeature.entry(Items.BOOK,"Правила: площадка пуста, вход на север, без автоматического возврата",()->api.reply(player,
-                "Стройка только в Верхнем мире. Вход — на север (−Z). Все материалы расходуются по точной ведомости блоков. Готовые здания дают только ванильные рабочие места и хранилища; пассивного дохода нет. Перезапуск требует сверки незавершённых работ.")));
+                "Стройка только в своих приватах в Верхнем мире и с правом строительства. Вход — на север (−Z). Все материалы расходуются по точной ведомости блоков. Готовые здания дают только ванильные рабочие места и хранилища; пассивного дохода нет. Перезапуск требует сверки незавершённых работ.")));
         if(!store.data().config.buildingPurchasesEnabled) entries.add(ContentFeature.entry(Items.BARRIER,"Покупки отключены до испытаний escrow",()->api.reply(player,"Предпросмотр доступен. Реальная покупка включается персоналом только на испытательном сервере после проверки восстановления.")));
         api.menu(player,"Городские чертежи",entries);
     }
     private boolean available(ServerPlayerEntity p) { if(!store.ready() || !api.ready()) { api.reply(p,"Модуль строительства пока недоступен.");return false;}return true; }
     private boolean eligible(ServerPlayerEntity p) {
-        return !p.isCreative() && !p.isSpectator() && !p.hasVehicle() && !api.inCombat(p.getUuid())
+        return api.ready() && !api.inventoryLocked(p.getUuid()) && !p.isCreative() && !p.isSpectator() && !p.hasVehicle() && !api.inCombat(p.getUuid())
                 && p.getEntityWorld().getRegistryKey().equals(World.OVERWORLD);
+    }
+    /** Re-read membership, claims, border and loading state after every asynchronous boundary. */
+    private boolean authorizedSite(ServerPlayerEntity player,BlockPlan plan,BlockPos origin) {
+        if(!eligible(player)) return false;
+        ServerWorld world=player.getEntityWorld();
+        return BuildingSiteRules.allowed(plan,origin.getX(),origin.getY(),origin.getZ(),(x,y,z)-> {
+            BlockPos pos=new BlockPos(x,y,z);
+            return world.isInHeightLimit(y) && world.getWorldBorder().contains(pos)
+                    && world.isChunkLoaded(pos) && api.canBuildCity(player,world,pos);
+        });
+    }
+    private boolean authorizedJob(ServerPlayerEntity player,ContentData.Job job) {
+        return player!=null && player.getEntityWorld().getRegistryKey().getValue().toString().equals(job.world)
+                && player.squaredDistanceTo(job.x,job.y,job.z)<=64*64
+                && authorizedSite(player,plans.get(job.plan),new BlockPos(job.x,job.y,job.z));
     }
     private void preview(ServerPlayerEntity player,BlockPlan plan) {
         if(!eligible(player)) { api.reply(player,"Нужны выживание, Верхний мир и отсутствие боя/техники.");return; }
@@ -72,6 +87,7 @@ final class BuildingService {
         if(p.validating || awaitingBalance.contains(player.getUuid())) return;
         if(!store.idle()) { api.reply(player,"Хранилище занято. Повторите подтверждение через секунду.");return; }
         if(!limits(player,p)) return;
+        if(!authorizedSite(player,p.plan,p.origin)) { api.reply(player,"Вся площадка и основание должны быть в загруженных своих приватах с правом строительства.");return; }
         if(!hasMaterials(player,p.plan)) { api.reply(player,"Не хватает обычных, непереименованных материалов из ведомости.");return; }
         if(p.plan.id().equals("workshop_v1") && reputation(player)<40) { api.reply(player,"Мастерская требует 40 репутации.");return; }
         p.validating=true;p.cursor=0;api.reply(player,"Проверяю весь свободный объём и основание. Пока ничего не списано.");
@@ -124,12 +140,12 @@ final class BuildingService {
         for(int n=0;p.cursor<p.plan.volume() && n<store.data().config.scanBudget && System.nanoTime()<until;n++,p.cursor++) {
             var relative=p.plan.volumePoint(p.cursor);BlockPos pos=p.origin.add(relative.x(),relative.y(),relative.z());
             if(!world.isInHeightLimit(pos.getY()) || !world.getWorldBorder().contains(pos) || !world.isChunkLoaded(pos)
-                    || !api.canBuild(player,world,pos) || !world.getBlockState(pos).isAir() || !world.getFluidState(pos).isEmpty()) {
+                    || !api.canBuildCity(player,world,pos) || !world.getBlockState(pos).isAir() || !world.getFluidState(pos).isEmpty()) {
                 reject(p,player,"Объём занят, чанк не загружен или нет права строительства: "+pos.toShortString());return;
             }
             if(relative.y()==p.plan.minY()) {
                 BlockPos below=pos.down();
-                if(!api.canBuild(player,world,below) || !world.getBlockState(below).isSolidBlock(world,below) || !world.getFluidState(below).isEmpty()) {
+                if(!api.canBuildCity(player,world,below) || !world.getBlockState(below).isSolidBlock(world,below) || !world.getFluidState(below).isEmpty()) {
                     reject(p,player,"Нужна ровная сплошная сухая опора: "+below.toShortString());return;
                 }
             }
@@ -145,6 +161,7 @@ final class BuildingService {
                 if(!store.ready() || current==null) return;
                 if(error!=null || balance==null || balance<price) { api.reply(current,"Недостаточно денег или хранилище денег недоступно.");return; }
                 if(!eligible(current) || !current.getEntityWorld().getRegistryKey().equals(p.world) || current.squaredDistanceTo(p.origin.getX(),p.origin.getY(),p.origin.getZ())>32*32 || p.expires<System.currentTimeMillis() || !store.data().config.buildingPurchasesEnabled || !limits(current,p) || !hasMaterials(current,p.plan)) return;
+                if(!authorizedSite(current,p.plan,p.origin)) { api.reply(current,"Права на площадку изменились. Ничего не списано.");return; }
                 ContentData.Job job=new ContentData.Job();job.id=UUID.randomUUID().toString();job.owner=p.owner.toString();
                 job.world=p.world.getValue().toString();job.plan=p.plan.id();job.hash=p.plan.fingerprint();job.x=p.origin.getX();job.y=p.origin.getY();job.z=p.origin.getZ();job.price=price;job.createdAt=System.currentTimeMillis();
                 store.change(s->{
@@ -163,6 +180,14 @@ final class BuildingService {
     private void charge(String id) {
         var job=store.data().jobs.get(id);if(job==null || busy.contains(id) || !Set.of("CHARGING","PAYMENT_REVIEW").contains(job.stage)) return;
         busy.add(id);
+        // CHARGING has not called debit yet. PAYMENT_REVIEW must resolve the same operation ID,
+        // even if the owner is offline or no longer authorized; it must never assume a refund.
+        if(job.stage.equals("CHARGING") && (!store.data().config.buildingPurchasesEnabled
+                || !authorizedJob(server.getPlayerManager().getPlayer(UUID.fromString(job.owner)),job))) {
+            store.change(s->{var j=s.jobs.get(id);j.stage="ABANDONED";j.problem="Права или доступность площадки изменились до платежа. Ничего не списано.";},
+                    ()->{busy.remove(id);replyOwner(store.data().jobs.get(id),store.data().jobs.get(id).problem);},err->busy.remove(id));
+            return;
+        }
         api.debit(UUID.fromString(job.owner),job.price,job.operationId(),"Городской чертёж "+job.plan).whenComplete((paid,error)->server.execute(()-> {
             if(!store.ready()) { busy.remove(id);return; }
             store.change(s->{var j=s.jobs.get(id);
@@ -179,11 +204,14 @@ final class BuildingService {
         var job=store.data().jobs.get(id);
         if(job==null || !job.owner.equals(player.getUuidAsString()) || !job.stage.equals("WAITING_MATERIALS") || busy.contains(id) || !eligible(player)) return;
         BlockPlan plan=plans.get(job.plan);
+        if(!store.data().config.buildingPurchasesEnabled || !authorizedJob(player,job)) {
+            api.reply(player,"Оплата сохранена, но площадка недоступна или покупки отключены. Материалы не изъяты; повторного платежа не будет.");return;
+        }
         if(!hasMaterials(player,plan)) { api.reply(player,"Оплата уже сохранена. Принесите материалы и нажмите «Продолжить» — повторного платежа не будет.");return; }
         busy.add(id);
         store.change(s->{var j=s.jobs.get(id);if(!j.stage.equals("WAITING_MATERIALS"))throw new IllegalStateException("Unexpected material stage");j.stage="MATERIAL_INTENT";},()-> {
             ServerPlayerEntity current=server.getPlayerManager().getPlayer(player.getUuid());
-            if(current==null || !eligible(current) || !hasMaterials(current,plan)) {
+            if(current==null || !store.data().config.buildingPurchasesEnabled || !authorizedJob(current,store.data().jobs.get(id)) || !hasMaterials(current,plan)) {
                 store.change(s->{s.jobs.get(id).stage="WAITING_MATERIALS";},()->busy.remove(id),err->busy.remove(id));return;
             }
             removeMaterials(current,plan);
@@ -201,11 +229,14 @@ final class BuildingService {
             int cursor=latest.cursor;String problem="";
             long until=System.nanoTime()+store.data().config.tickMicros*1000L;
             if(player==null || world==null || !eligible(player) || player.getEntityWorld()!=world || player.squaredDistanceTo(latest.x,latest.y,latest.z)>64*64) problem="Владелец отошёл или вошёл в бой.";
-            else while(cursor<target && System.nanoTime()<until) {
+            else if(!authorizedJob(player,latest)) problem="Изменились права на площадку, граница мира или загрузка чанков.";
+            // Full-site authorization is bounded but can consume the soft time budget.
+            // Always allow the first cell check so a valid job cannot stall indefinitely.
+            else while(cursor<target && (cursor==latest.cursor || System.nanoTime()<until)) {
                 var cell=plan.cells().get(cursor);BlockPos pos=at(latest,cell);
                 if(!world.isChunkLoaded(pos)) break;
                 var current=world.getBlockState(pos);var expected=WorldAccess.state(cell.block());
-                var action=PlacementRules.cell(api.canBuild(player,world,pos) && world.getWorldBorder().contains(pos),true,current.isAir(),!current.getFluidState().isEmpty(),current.equals(expected),true);
+                var action=PlacementRules.cell(api.canBuildCity(player,world,pos) && world.getWorldBorder().contains(pos),true,current.isAir(),!current.getFluidState().isEmpty(),current.equals(expected),true);
                 if(action==PlacementRules.CellAction.STOP) {problem="Конфликт или изменились права: "+pos.toShortString();break;}
                 if(action==PlacementRules.CellAction.PLACE && !world.setBlockState(pos,expected,Block.NOTIFY_LISTENERS)) {problem="Блок не принят миром: "+pos.toShortString();break;}
                 cursor++;
