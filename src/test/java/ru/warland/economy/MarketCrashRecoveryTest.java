@@ -56,7 +56,7 @@ class MarketCrashRecoveryTest {
             assertEquals(after ? ListingStatus.SOLD : ListingStatus.OPEN, market.listing(LISTING).get().status());
             assertEquals(after ? BUYER : SELLER, market.item(ITEM).get().owner());
             store.tx(c -> Store.update(c, "DROP TRIGGER IF EXISTS crash_market_receipt")).get();
-            market.buy(OP, BUYER, LISTING, 100, 1001).get(); market.buy(OP, BUYER, LISTING, 100, 1001).get();
+            market.buy(OP, BUYER, LISTING, 100, () -> true, () -> 1001).get(); market.buy(OP, BUYER, LISTING, 100, () -> true, () -> 1001).get();
             assertEquals(0, store.balance(BUYER).get()); assertEquals(95, store.balance(SELLER).get());
             assertEquals(1, store.submit(c -> Store.scalar(c, "SELECT COUNT(*) FROM market_trades")).get());
             assertEquals(5, store.submit(c -> Store.scalar(c, "SELECT balance FROM accounts WHERE owner=?", FEE_ACCOUNT)).get());
@@ -88,17 +88,17 @@ class MarketCrashRecoveryTest {
             Path dir = Path.of(args[0]); boolean after = Boolean.parseBoolean(args[2]);
             Store store = new Store(dir.resolve("crash.db")); store.start().get();
             MarketRepository market = new MarketRepository(store); market.start().get();
-            market.prepareDeposit(ITEM, SELLER, "synthetic-stack", "before", "after", 1000).get();
+            market.prepareDeposit(ITEM, SELLER, "synthetic-stack", "before", "after", () -> true, () -> 1000).get();
             if (args[1].equals("deposit")) {
                 save(dir.resolve("inventory"), after ? "after" : "before");
             } else {
                 market.reconcile(ITEM, SELLER, "after", 1000).get();
                 if (args[1].equals("delivery")) {
-                    market.prepareDelivery(OP, SELLER, ITEM, "before", "after", 1000).get();
+                    market.prepareDelivery(OP, SELLER, ITEM, "before", "after", () -> true, () -> 1000).get();
                     save(dir.resolve("inventory"), after ? "after" : "before");
                 } else {
                     store.money(BUYER, 100, "seed", "test").get();
-                    market.list(LISTING, SELLER, ITEM, 100, 500, 2000, 1000).get();
+                    market.list(LISTING, SELLER, ITEM, 100, 500, 2000, () -> true, () -> 1000).get();
                     if (!after) store.tx(c -> {
                         Function.create(c, "crash_market", new Function() {
                             @Override protected void xFunc() { Runtime.getRuntime().halt(71); }
@@ -106,7 +106,7 @@ class MarketCrashRecoveryTest {
                         Store.update(c, "CREATE TRIGGER crash_market_receipt AFTER INSERT ON market_trades BEGIN SELECT crash_market(); END");
                         return null;
                     }).get();
-                    market.buy(OP, BUYER, LISTING, 100, 1000).get();
+                    market.buy(OP, BUYER, LISTING, 100, () -> true, () -> 1000).get();
                 }
             }
             Runtime.getRuntime().halt(after ? 72 : 71);

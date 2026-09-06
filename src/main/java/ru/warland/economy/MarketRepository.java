@@ -11,11 +11,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
+import java.util.function.LongSupplier;
 
 /**
  * SQLite-only market domain. This is NOT an inventory adapter or a public gameplay feature.
  * All writes share Store's serial transaction worker. Callers must supply server-produced,
  * canonical snapshots read back from durable player data, never a client acknowledgement.
+ * Actor commands require the captured session lease and a trusted server clock.
+ * Admission and clock sampling happen on the Store worker, not when enqueued.
  * An ambiguous inventory outcome stays locked until reconciliation proves before or after.
  */
 public final class MarketRepository {
@@ -50,14 +54,14 @@ public final class MarketRepository {
     }
 
     public CompletableFuture<Intent> prepareDeposit(UUID operation, UUID player, String stack,
-                                                    String before, String after, long now) {
-        return store.tx(c -> prepare(c, operation, player, IntentKind.DEPOSIT, operation,
+                                                    String before, String after, BooleanSupplier lease, LongSupplier clock) {
+        return actorTx(lease, clock, (c, now) -> prepare(c, operation, player, IntentKind.DEPOSIT, operation,
                 text(stack, 65_536), before, after, now));
     }
 
     public CompletableFuture<Intent> prepareDelivery(UUID operation, UUID player, UUID item,
-                                                     String before, String after, long now) {
-        return store.tx(c -> {
+                                                     String before, String after, BooleanSupplier lease, LongSupplier clock) {
+        return actorTx(lease, clock, (c, now) -> {
             Intent previous = findIntent(c, operation);
             if (previous != null) {
                 sameIntent(previous, player, IntentKind.DELIVERY, item, previous.stack(), before, after);
@@ -88,7 +92,8 @@ public final class MarketRepository {
         return findIntent(c, operation);
     }
 
-    /** Read-only evidence from saved player data decides the outcome; never modifies Minecraft. */
+    /** System recovery, intentionally independent of an online session: saved player-data evidence
+     * decides the outcome even after disconnect. Never modifies Minecraft or trusts client ACKs. */
     public CompletableFuture<Intent> reconcile(UUID operation, UUID player, String persistedSnapshot, long now) {
         return store.tx(c -> {
             text(persistedSnapshot, MAX_SNAPSHOT); time(now);
@@ -137,8 +142,8 @@ public final class MarketRepository {
     public CompletableFuture<Item> item(UUID item) { return store.submit(c -> requireItem(c, item)); }
     public CompletableFuture<Listing> listing(UUID listing) { return store.submit(c -> requireListing(c, listing)); }
 
-    public CompletableFuture<Listing> list(UUID id, UUID seller, UUID item, long price, int feeBps, long expires, long now) {
-        return store.tx(c -> {
+    public CompletableFuture<Listing> list(UUID id, UUID seller, UUID item, long price, int feeBps, long expires, BooleanSupplier lease, LongSupplier clock) {
+        return actorTx(lease, clock, (c, now) -> {
             Objects.requireNonNull(id); Objects.requireNonNull(seller); Objects.requireNonNull(item);
             money(price); require(feeBps >= 0 && feeBps <= 10_000, "Invalid fee"); time(now); time(expires);
             Listing previous = findListing(c, id);
@@ -160,8 +165,8 @@ public final class MarketRepository {
     }
 
     /** Debit, seller payout, fee ledger, ownership and receipt commit together or all roll back. */
-    public CompletableFuture<Trade> buy(UUID operation, UUID buyer, UUID listing, long expectedPrice, long now) {
-        return store.tx(c -> {
+    public CompletableFuture<Trade> buy(UUID operation, UUID buyer, UUID listing, long expectedPrice, BooleanSupplier lease, LongSupplier clock) {
+        return actorTx(lease, clock, (c, now) -> {
             Objects.requireNonNull(operation); Objects.requireNonNull(buyer); Objects.requireNonNull(listing);
             money(expectedPrice); time(now);
             Trade previous = findTrade(c, operation);
@@ -193,8 +198,8 @@ public final class MarketRepository {
         });
     }
 
-    public CompletableFuture<Listing> cancel(UUID listing, UUID seller, long now) {
-        return store.tx(c -> {
+    public CompletableFuture<Listing> cancel(UUID listing, UUID seller, BooleanSupplier lease, LongSupplier clock) {
+        return actorTx(lease, clock, (c, now) -> {
             time(now);
             Listing offer = requireListing(c, listing);
             require(offer.seller().equals(seller), "Listing not owned by seller");
@@ -235,6 +240,24 @@ public final class MarketRepository {
                 offer.item().toString(), offer.seller().toString()) == 1, "Escrow inconsistent");
         Store.update(c, "UPDATE market_listings SET status=? WHERE id=?", status.name(), offer.id().toString());
         audit(c, offer.seller(), "market." + status.name().toLowerCase(java.util.Locale.ROOT), offer.id(), now);
+    }
+
+    @FunctionalInterface
+    private interface ActorWork<T> { T run(Connection connection, long now) throws Exception; }
+
+    /** No unleased overload: a future gameplay adapter must supply its captured session lease.
+     * Clock must be the server's wall clock (e.g. System::currentTimeMillis), never client time
+     * or a pre-sampled request timestamp. Clock/lease must not access Minecraft off-thread.
+     * Revocation before worker admission cancels even an idempotent replay. Once admitted,
+     * the short atomic transaction completes; reconnect cannot resurrect the old lease.
+     */
+    private <T> CompletableFuture<T> actorTx(BooleanSupplier lease, LongSupplier clock, ActorWork<T> work) {
+        Objects.requireNonNull(lease, "lease"); Objects.requireNonNull(clock, "clock");
+        return store.tx(lease, c -> {
+            long now = clock.getAsLong();
+            time(now);
+            return work.run(c, now);
+        });
     }
 
     private static boolean blocked(Connection c, UUID player) throws SQLException {
