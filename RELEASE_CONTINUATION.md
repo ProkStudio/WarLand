@@ -1,39 +1,49 @@
-# WarLand — точка продолжения 2026-09-06
+# WarLand — актуальная точка продолжения
 
-## Статус на21:24МСК
-По прямому запросу владельца продолжены разработка и подготовка релиза. **Полный stable#15 НЕ готов.** Файл нужен для возобновления после обрыва; фоновой работы после завершения чата не обещает.
+**2026-09-06: alpha.3.2 опубликована И установлена. Полный stable#15 НЕ готов.** Файл сохранён по прямому запросу владельца для возобновления после обрыва. Это checkpoint, не обещание фоновой разработки после окончания чата.
 
-### Что выполнено
-- Восстановлен доступ VPS после HTTP429.
-- Сохранены исходные worktrees и локальные commits RTP. Три падения предыдущих тестов оказались конфликтом имён fixture HAZARD/enum HAZARD; исправлено без ослабления terrain policy.
-- Подключён ранее не вызывавшийся RtpService из dedicated WarLand initializer. CoreRuntime/auth/content/HUD не менялись. Добавлен registration regression и новый tools/rtp_runtime_smoke.py.
-- PR41 **merged** в `agent/lobby-20260906-1722/fortress-chat-auth`, merge `ff97667a1fc3d335dd46796e2a2126bc45bdea18`. Исходная проверенная ветка `agent/release-20260906-1806/rtp-integration`, head`ab677851db939568910d36e876345f2c3c244d87`.
-- Java21 clean build:513 detected/509 passed/4 прежних skips/0 failures/errors. Python210/210. GitHub verify https://github.com/ProkStudio/WarLand/actions/runs/34051168112 — SUCCESS18:18:38UTC.223 tracked файла совпали с Git blobs.
-- Предрелизный JAR(metadata3.1) SHA256`0ec31a8683e1a073644da697cc1ed9128058667c0ee9018e6cba0272f2214e31`.
-- Native auth suite PASS: два graceful boot/stop, cancel/stale/invalid actions, registration→pack/hash/CRC→PLAY/balance, wrong-password denial→login after restart.
-- Отдельный RTP runtime PASS: реальный synthetic vanilla-protocol клиент телепортирован в(2134.5,69,-1480.5); повтор отклонён; после graceful restart/login cooldown сохранился и RTP отклонён. Одна стартовая выплата1500, balance1500, stable identity, SQLite/FK clean, shutdown0/errors=[], нет canaries пароля.
+## Игроку
+- Сервер `201.51.10.116:25565`, обычный Minecraft Java1.21.11. Клиентские моды не требуются, ресурспак прежний и скачивается штатно.
+- Теперь доступен `/rtp`: бесплатно, безопасная поверхность Верхнего мира1000–3000блоков от спавна, задержка180сек между переносами, сохраняемая после reconnect/restart.
+- Во время подготовки не двигаться; бой/урон/опасность/техника/параллельное перемещение отменяют запрос. При медленной генерации возможен безопасный отказ; повторить не раньше30сек. Это ограниченная загрузка, не обещание отсутствия лагов.
+- Вход пока через существующую нативную форму, НЕ через чат. Существующие аккаунты/пароли/реальный owner сохранены, повторный bootstrap не нужен. Поле пароля не маскируется; использовать отдельный пароль WarLand.
 
-### Релиз в подготовке — не путать с установленным сервером
-- Ветка `release/0.1.0-alpha.3.2`, source`2c13ebad2dde95b1f0398820005e38a8e9a9414b`: Java source тот же; новая version3.2, отдельный read-only build→gated prerelease publish workflow, docs/RTP_RELEASE.md.
-- CI https://github.com/ProkStudio/WarLand/actions/runs/34051393160 ещё выполнялся при этом checkpoint. Не считать готовым без проверки.
-- Планируется отдельный серверный patch(JAR/sources/SHA256SUMS/SOURCE_COMMIT/notes), НЕ full installer. Старый installer alpha3 сохраняется; все старые tags/assets не перезаписываются.
-- До установки обязательно скачать опубликованный3.2 JAR, сверить tag/SOURCE_COMMIT/hashes/metadata, повторить isolated RTP/auth/restart acceptance именно на нём.
-- Production `warland-alpha.service` по-прежнему3.1; в этой сессии НЕ перезапускался, реальные accounts/worlds/keys/owner/flags не менялись.
+## Релиз и исходники
+- https://github.com/ProkStudio/WarLand/releases/tag/v0.1.0-alpha.3.2 — prerelease,5assets: executable JAR, sources JAR, SHA256SUMS, SOURCE_COMMIT, release notes.
+- Это серверный patch, НЕ новый полный installer; существующий alpha3 installer/зависимости/resource-pack не заменены.
+- Фактический lightweight tag и SOURCE_COMMIT: `2c13ebad2dde95b1f0398820005e38a8e9a9414b`, ветка `release/0.1.0-alpha.3.2`. Поле GitHub release target_commitish может показывать main; проверен именно ref тега.
+- Установленный executable SHA256: `ac5152842d6b1f7ac240474771333672fb2d31f4e3f4a09255b90592de429a99`.
+- Release CI https://github.com/ProkStudio/WarLand/actions/runs/34051393160 — build и publish SUCCESS. Скачанные4checksums/SOURCE_COMMIT/tag/mod metadata/ZIP CRC проверены. Старые tags/assets не перезаписаны; GitHub platform immutable=false, workflow сам отказывается заменять существующий tag/release.
+- PR41 merged в `agent/lobby-20260906-1722/fortress-chat-auth`, merge`ff97667a1fc3d335dd46796e2a2126bc45bdea18`. Runtime code62b1f4a; исходная ветка `agent/release-20260906-1806/rtp-integration`.
+- PR42 — отдельное обновление ТОЛЬКО QA helper, head`284cccaa96346e0fb7e348ed130fea4350435634`; при последней проверке CI34051937581 ещё выполнялся. Не считать этот helper частью release tag. Проверить окончательный CI и нормально merge, если green.
 
-## Пути и команды продолжения
-Own checkout `/opt/warland-build/release-20260906-1806-rtp`; logs/{build-v2,python-v2,runtime-v1,rtp-runtime-v1}.exit все0. Не удалять logs/provisional-* и старый RTP FAILED evidence.
+## Что реализовано
+Сохранена и подключена ранее подготовленная RTP реализация c8a7678/b813dd8: один глобальный запрос, ограниченные async tickets/попытки/время, устойчивый пол3×3, пространство/опасности5×5, border/collision/claims с соседними чанками, current session lease, отмена при движении/disconnect/смене мира/бое/inventory-lock/warp/war-window. В существующей SQLite state хранится180сек cooldown до переноса; денег не списывает, блоки не перестраивает. Отмена после уже принятой записи может консервативно оставить cooldown.
 
-Synthetic evidence:
-- `/opt/warland-build/vanilla-dialog-qa-rtp-1806-v1/result.json`
-- `/opt/warland-build/vanilla-dialog-qa-rtp-gameplay-1806-v1/result.json`
+Исправлены3ложных test failures(Hazard fixture shadowing enum), добавлена регистрация из dedicated WarLand initializer и регрессионный тест. Опубликованный change НЕ меняет shared CoreRuntime/auth/content/HUD. Изначальный failed evidence и все старые worktrees сохранены.
 
-`tools/rtp_runtime_smoke.py --jar <exact.jar> --polymer <pinned-polymer.jar> --out /opt/warland-build/vanilla-dialog-qa-<new> --port <free-loopback> --http-port <free-loopback> --synthetic-fixture`, nonroot warland-build и общий `/opt/warland-build/build.lock`. Никогда не использовать реальный аккаунт владельца/production data в QA.
+## Проверки и честные границы
+- Java21 clean build:513 detected/509passed/4прежних registry skips/0failures/errors; Python210/210. Exact ab67785 CI34051168112 SUCCESS18:18:38UTC;223tracked файла byte-matched.
+- Предрелизный metadata3.1 JAR `0ec31a8683e1a073644da697cc1ed9128058667c0ee9018e6cba0272f2214e31` прошёл отдельные двухцикловые native auth и RTP suites. Он НЕ установлен вместо3.2.
+- Скачанный опубликованный3.2 JAR прошёл fresh v2: cancel/stale/invalid auth→registration→pack/hash/CRC→PLAY/balance→успешный RTP(-1591.5,72,-2135.5)→repeat denied→graceful restart→wrong-password denied→login→persisted cooldown denied. Stable identity, одна стартовая выплата1500/balance1500, SQLite quick_check=ok/FK clean, два shutdown0, errors=[], нет password canaries.
+- Первый published-JAR v1 FAILED: выбранный холодный чанк не загрузился за4сек; сервер безопасно отказал, старый positive-only harness ожидал успеха. Evidence сохранено. Новый helper распознаёт только такой отказ, проверяет отсутствие перемещения/cooldown и соблюдает30сек backoff; максимум3попытки, реальный успех всё равно обязателен. **Успешный v2 наблюдал0таких отказов, поэтому новый retry-path этим прогоном не считается покрытым.** Добавлено ожидание2.2сек после успешного переноса согласно существующему global backoff.
+- Wire QA — НЕ GUI/external beta/load и НЕ полный live-negative/crash matrix. Terrain/lease negative cases: pure/SQLite/source tests. В QA наблюдались cold-start/world-load warnings7–9сек, не скрыты. Полная performance acceptance открыта.
 
-Перед deployment: отдельный#12 LOCK, zero-online preflight, service-bound private full-runtime backup+verification, code-only swap, ready/version/identity/data checks, cancel-only production probe. Rollback возвращает только старый JAR, не старую БД поверх новых действий. Действующий3.1 hash`65a9627f959e5767290eda576766d98a99807097f072eb5730f1e62402b85e77`; исходный безопасный driver `/opt/warland-ops/auth-dialog-hotfix-20260906/deploy.py` нельзя запускать повторно без отдельной адаптации. Старый backup.sh не поддерживает alpha service — не обходить его allowlist.
+## Подтверждённое развёртывание
+- `/opt/warland-ops/rtp-alpha32-20260906/result.json`: success=true, phase=complete, deploy.exit0, rollback_used=false.
+- Перед stop —0игроков, service-bound preflight, свободные common locks. `warland-alpha.service` active/running; новый запуск18:32:16UTC, WarLand ready18:32:39UTC, version0.1.0-alpha.3.2, listener25565/protocol774. Ровно1WarLand executable вmods, hashсовпадает с release.
+- Private full-runtime backup `/var/backups/warland-rtp-alpha32-20260906-183205/runtime.tar.gz`, SHA256`ec14f318b03812beac6127a33cd341bc379242171ffcbaf49b852459082f970f`; tar read-back comparison выполнен. **Booted restore именно этого нового архива НЕ заявляется.** Более ранний alpha3 booted restore описан в RUN_STATE.md.
+- identity_preserved=true, baseline_rows_preserved=true для profiles/auth_accounts/accounts/ledger/auth_owner, SQLite/FK clean. Production cancel-only probe увидел восстанавливаемую NONE-форму и корректную отмену, нового аккаунта не создавал. Startup errors=[]; новых build/QA JVM нет, OS build/backup locks свободны.
+- Только code swap; configs/worlds/accounts/owner/keys/неоконченные flags не менялись. Старый JAR сохранён: `runtime/retired-rtp-alpha32-20260906-183205/warland-0.1.0-alpha.3.1.jar`.
+- Rollback: штатно остановить ТОЛЬКО warland-alpha.service, убрать3.2изmods в отдельный сохранённый каталог, вернуть единственный прежний3.1JAR, запустить/проверить. **Не восстанавливать старую БД/миры поверх новых действий игроков.**
 
-## Незавершённое
-PLAYER_EXPERIENCE_STATUS.md остаётся полным согласованным lobby/auth-chat/крепость/TAB/HUD/owner-help ТЗ. RTP реализован/проверен отдельно, остальное этой итерацией не объявляется готовым. Main всё ещё docs-first; конфликтный PR40 не слепо merge. Market/inventory crash-safety/purchase/capture/полная модерация/авиация/external beta10/20/30/stable#15 остаются открытыми.
+## Где продолжать
+Own checkout `/opt/warland-build/release-20260906-1806-rtp`.
+- logs/{build-v2,python-v2,runtime-v1,rtp-runtime-v1,rtp-published-v2}.exit=0; rtp-published-v1.exit=1 сохранён.
+- logs/published/verified.json и исходные release assets.
+- Synthetic results: `/opt/warland-build/vanilla-dialog-qa-rtp-{1806-v1,gameplay-1806-v1,published-1806-v1,published-1806-v2}/result.json` (точные существующие каталоги сверять; failed не удалять).
+- Private deployment driver/evidence `/opt/warland-ops/rtp-alpha32-20260906/`. Повторно НЕ запускать уже выполненный driver: он намеренно отказывается при существующемresult.json.
 
-Runtime QA — не graphical/external/load acceptance; terrain/lease негативные cases покрыты pure/SQLite/source tests, не полной live-negative matrix. Холодный QA boot/world-load давал warnings7–9сек. Source checkpoint не подменяет performance acceptance.
+Следующие приоритеты: завершить QA-only PR42; затем согласованное PLAYER_EXPERIENCE_STATUS.md — auth-chat/isolation, лобби на каждый вход, крепость160×160, TAB[OWNER], sidebar с деньгами и owner command help. RTP уже установлен, эти остальные требования НЕ считать сделанными. Main пока docs-first, PR40 конфликтный — отдельная аккуратная интеграция. Market/inventory crash-safety/purchases/capture/полная модерация/авиация/beta10/20/30/stable#15 остаются открытыми.
 
-Не публиковать пароли/bootstrap/identity.bin/БД/миры/playerdata/private archives. Чужие ветки/worktrees/CLAIM сохранять. Перед новой сессией читать последние#12 и этот файл; освободить собственные ресурсы после фактического окончания jobs.
+Не публиковать пароли/bootstrap/identity.bin/БД/миры/playerdata/архивы. Не сбрасывать реального owner и не чистить чужие dirty trees. Перед новой работой читать свежий#12, commits/PR/CI и эти checkpoints; тяжёлые jobs по одному подbuild.lock, deployment под отдельнымbackup.lock. Освобождение ресурсов отражать только после фактического окончания.
