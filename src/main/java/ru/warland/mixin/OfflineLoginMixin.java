@@ -40,4 +40,13 @@ public abstract class OfflineLoginMixin {
    startVerify(profile); // Only CONFIGURATION follows; no player/profile/grant before WarLand auth.
   });
  }
+ // tickVerify runs later than onKey. Recheck before vanilla disconnectDuplicateLogins;
+ // AuthRuntime's exclusive reservation independently protects delayed CONFIGURATION.
+ @Inject(method="tickVerify",at=@At("HEAD"),cancellable=true)
+ private void warland$rejectLateDuplicate(GameProfile profile,CallbackInfo ci) {
+  if(!OfflineTransport.enabled(server))return;
+  if(!connection.isEncrypted()||server.getPlayerManager().getPlayer(profile.id())!=null){
+   ci.cancel();disconnect(Text.literal("WarLand: защищённый вход сейчас недоступен. Переподключитесь позже."));
+  }
+ }
 }
