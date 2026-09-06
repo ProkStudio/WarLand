@@ -3,6 +3,7 @@ package ru.warland.core;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.BooleanSupplier;
 import net.fabricmc.fabric.api.event.lifecycle.v1.*;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -38,7 +39,7 @@ public final class CoreRuntime implements WarLandApi {
  public CoreRuntime()throws Exception{
   INSTANCE=this;Path game=FabricLoader.getInstance().getGameDir();dir=game.resolve("warland");
   config=GameConfig.load(FabricLoader.getInstance().getConfigDir().resolve("warland/core.json"));
-  store=new Store(dir.resolve("warland.db"));nations=new NationsService(store,config);wars=new WarService(store,config,nations);auth=new AuthRuntime(this);
+  store=new Store(dir.resolve("warland.db"));nations=new NationsService(store,config,this::actionLease);wars=new WarService(store,config,nations,this::actionLease,this::online);auth=new AuthRuntime(this);
  }
  public void initialize(){
   auth.initialize();Protection.register(this);CoreCommands.register(this);
@@ -69,7 +70,7 @@ public final class CoreRuntime implements WarLandApi {
    boolean fresh=Store.scalar(c,"SELECT COUNT(*) FROM profiles WHERE uuid=?",id.toString())==0;
    Store.update(c,"INSERT INTO profiles(uuid,name,joined,last_seen) VALUES(?,?,?,?) ON CONFLICT(uuid) DO UPDATE SET name=excluded.name,last_seen=excluded.last_seen",id.toString(),p.getName().getString(),now,now);
    if(fresh)Store.update(c,"INSERT INTO state(namespace,key,json) VALUES('onboarding',?,'pending') ON CONFLICT(namespace,key) DO NOTHING",id.toString());
-   if(!Store.change(c,Store.player(id),config.startingBalance,"starter:"+id,"starter-grant"))throw new IllegalStateException("Starter balance overflow");
+   if(!Store.grantStarter(c,id,config.startingBalance))throw new IllegalStateException("Starter balance overflow");
    return new ProfileJoin(Store.scalar(c,"SELECT tutorial FROM profiles WHERE uuid=?",id.toString()),"pending".equals(Store.string(c,"SELECT json FROM state WHERE namespace='onboarding' AND key=?",id.toString())));
   }).whenComplete((profile,e)->server.execute(()->{if(!auth.authenticated(p))return;if(e!=null){p.networkHandler.disconnect(Text.literal("Не удалось безопасно загрузить профиль."));WarLand.LOG.error("Profile initialization failed",e);return;}
    auth.profileReady(p);
@@ -109,6 +110,12 @@ public final class CoreRuntime implements WarLandApi {
   if(tick%12000==0)store.checkpoint().exceptionally(e->{WarLand.LOG.error("Checkpoint failed",e);return null;});
  }
  public boolean authorized(ServerPlayerEntity p){return ready&&!stopping&&auth.allowed(p);}
+ /** Called only when a user action enters a service, never later from the DB worker. */
+ private BooleanSupplier actionLease(UUID actor){
+  if(server==null||!server.isOnThread())return ()->false;
+  ServerPlayerEntity player=server.getPlayerManager().getPlayer(actor);
+  return player!=null&&online(player)?auth.lease(player):()->false;
+ }
  public boolean online(ServerPlayerEntity p){return authorized(p)&&server!=null&&server.getPlayerManager().getPlayer(p.getUuid())==p;}
  public boolean gate(ServerPlayerEntity p){if(!authorized(p)){reply(p,"Системы временно недоступны или авторизация истекла.");return false;}long now=System.currentTimeMillis(),last=rateLimits.getOrDefault(p.getUuid(),0L);if(now-last<250){reply(p,"Не так быстро.");return false;}rateLimits.put(p.getUuid(),now);return true;}
  public void tag(UUID id){combat.put(id,System.currentTimeMillis()+config.combatSeconds*1000L);teleports.remove(id);}

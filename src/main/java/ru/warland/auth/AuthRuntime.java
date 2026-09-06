@@ -9,6 +9,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -78,7 +79,7 @@ public final class AuthRuntime implements AutoCloseable {
         }
         try {
             var profile = ((AuthCommonAccess) handler).warland$profile();
-            Session session = new Session(handler, engine.open(profile.id(), profile.name(), address.getAddress().getHostAddress()));
+            Session session = new Session(handler, engine.reserve(profile.id(), profile.name(), address.getAddress().getHostAddress()));
             sessions.put(connection, session);
             handler.addTask(new ServerPlayerConfigurationTask() {
                 public Key getKey() { return TASK; }
@@ -136,6 +137,16 @@ public final class AuthRuntime implements AutoCloseable {
     public boolean allowed(ServerPlayerEntity player) {
         if (!authenticated(player)) return false;
         Session s = sessions.get(connection(player.networkHandler)); return s != null && s.profileReady;
+    }
+    /** Capture on the server thread. Evaluation never resolves a replacement player by UUID. */
+    public BooleanSupplier lease(ServerPlayerEntity player) {
+        if (!allowed(player)) return () -> false;
+        ServerPlayNetworkHandler play = player.networkHandler;
+        ClientConnection c = connection(play); Session s = sessions.get(c);
+        if (s == null || s.play != play || !s.released || !s.profileReady
+                || !s.identity.player().equals(player.getUuid())) return () -> false;
+        return () -> !closed && runtime.ready() && c.isOpen() && sessions.get(c) == s
+                && s.play == play && s.released && s.profileReady && engine.authenticated(s.identity);
     }
     public void profileReady(ServerPlayerEntity player) {
         if (authenticated(player)) { Session s = sessions.get(connection(player.networkHandler)); if(s != null) s.profileReady = true; }

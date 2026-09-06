@@ -4,6 +4,8 @@ import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import ru.warland.core.GameConfig;
 import ru.warland.data.Store;
 import ru.warland.nations.NationsService;
@@ -17,9 +19,25 @@ final class WarRepository {
     private final Store db;
     private final GameConfig config;
     private final LongSupplier clock;
+    private final Function<UUID, BooleanSupplier> actorLeases;
 
+    /** Explicit trusted fixture/system context. The live adapter must supply session leases. */
     WarRepository(Store db, GameConfig config, LongSupplier clock) {
+        this(db, config, clock, actor -> () -> true);
+    }
+
+    WarRepository(Store db, GameConfig config, LongSupplier clock,
+                  Function<UUID, BooleanSupplier> actorLeases) {
         this.db = db; this.config = config; this.clock = clock;
+        this.actorLeases = Objects.requireNonNull(actorLeases, "actor leases");
+    }
+
+    /** Capture on the calling/server thread; never reacquire a fresh session by UUID on the worker. */
+    private <T> CompletableFuture<T> action(UUID actor, Store.Work<T> work) {
+        final BooleanSupplier lease;
+        try { lease = Objects.requireNonNull(actorLeases.apply(actor), "actor lease"); }
+        catch (RuntimeException error) { return CompletableFuture.failedFuture(error); }
+        return db.tx(lease, work);
     }
 
     CompletableFuture<Void> initialize() {
@@ -59,7 +77,7 @@ final class WarRepository {
     }
 
     CompletableFuture<String> declare(UUID player, String target) {
-        return db.tx(c -> {
+        return action(player, c -> {
             validateConfig();
             if (!config.enableWarCapture) throw NationsService.rule("Войны ещё не открыты: необходимы боевые испытания");
             long now = clock.getAsLong();
@@ -85,7 +103,7 @@ final class WarRepository {
     }
 
     CompletableFuture<Void> capture(CaptureKey key, UUID participant) {
-        return db.tx(c -> {
+        return action(participant, c -> {
             long now = clock.getAsLong();
             if (!config.enableWarCapture) throw NationsService.rule("Захват отключён");
             War w = requireWar(c, key.war());
@@ -124,7 +142,7 @@ final class WarRepository {
     }
 
     CompletableFuture<String> peace(UUID player, String targetName) {
-        return db.tx(c -> {
+        return action(player, c -> {
             long now = clock.getAsLong();
             String nation = NationsService.require(c, player, "war");
             War w = activePair(c, nation, target(c, nation, targetName), now);
@@ -141,7 +159,7 @@ final class WarRepository {
     }
 
     CompletableFuture<String> surrender(UUID player, String targetName) {
-        return db.tx(c -> {
+        return action(player, c -> {
             long now = clock.getAsLong();
             String nation = NationsService.require(c, player, "war");
             War w = activePair(c, nation, target(c, nation, targetName), now);
