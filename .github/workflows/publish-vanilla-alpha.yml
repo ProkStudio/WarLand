@@ -1,0 +1,75 @@
+name: Build and publish vanilla alpha
+on:
+  push:
+    branches: ['agent/release-20260906-1403/vanilla-autodownload', 'release/0.1.0-alpha.3']
+    paths: ['src/**', 'tools/**', 'build.gradle', 'gradle.properties', 'release/**', 'docs/VANILLA_*.md', '.github/workflows/publish-vanilla-alpha.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vanilla-alpha-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Clean build and complete test suites
+        run: |
+          python3 tools/build.py -Pmod_version=0.1.0-alpha.3 clean test build
+          PYTHONPATH=tools python3 -m unittest discover -s tools/tests -v
+      - name: Build verified release artifacts
+        run: |
+          python3 tools/package_server.py --jar build/libs/warland-0.1.0-alpha.3.jar --out dist
+          (cd dist && sha256sum --check SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vanilla-alpha-assets
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vanilla-alpha-evidence-${{ github.sha }}
+          path: |
+            build/test-results/test/*.xml
+            build/reports/tests/test/
+          retention-days: 30
+  publish:
+    if: github.ref == 'refs/heads/release/0.1.0-alpha.3'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: vanilla-alpha-assets
+          path: dist
+      - name: Publish immutable alpha.3
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum --check SHA256SUMS)
+          if gh release view v0.1.0-alpha.3 >/dev/null 2>&1; then
+            echo 'Release exists; refusing to replace assets.'
+            exit 1
+          fi
+          # Creating the ref is atomic and refuses an existing tag, even without a release.
+          gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/v0.1.0-alpha.3 -f sha="$GITHUB_SHA" >/dev/null
+          gh release create v0.1.0-alpha.3 dist/* --verify-tag --title 'WarLand 0.1.0-alpha.3 — обычный Minecraft и автозагрузка' --notes-file docs/VANILLA_RELEASE.md --prerelease
