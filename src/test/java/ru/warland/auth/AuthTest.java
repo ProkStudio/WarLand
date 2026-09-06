@@ -21,7 +21,7 @@ class AuthTest {
     static char[] password() { return "WarLand synthetic passphrase".toCharArray(); }
     @BeforeEach void start() throws Exception {
         store = new Store(dir.resolve("auth.db")); store.start().get();
-        repo = new AuthRepository(store); repo.start().get(); auth = new Authentication(repo);
+        repo = new AuthRepository(store, AuthRepository.REQUESTED_OWNER, () -> NOW); repo.start().get(); auth = new Authentication(repo);
     }
     @AfterEach void stop() { auth.close(); store.close(); }
     void rejected(CompletableFuture<?> future) { assertThrows(CompletionException.class, future::join); }
@@ -94,7 +94,7 @@ class AuthTest {
     @Test void restartPreservesAccountAndOwnerWithoutRegranting() throws Exception {
         bootstrap(); repo.register(player, "egorkrid666", hash, Authentication.tokenDigest(TOKEN), NOW).get();
         auth.close(); store.close(); store = new Store(dir.resolve("auth.db")); store.start().get();
-        repo = new AuthRepository(store); repo.start().get(); auth = new Authentication(repo);
+        repo = new AuthRepository(store, AuthRepository.REQUESTED_OWNER, () -> NOW); repo.start().get(); auth = new Authentication(repo);
         assertEquals(player, repo.owner().get()); assertEquals(hash, repo.account(player, "egorkrid666").get().password());
         assertFalse(auth.owner(auth.open(player, "egorkrid666", "loopback")).get());
     }

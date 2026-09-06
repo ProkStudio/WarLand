@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.LongSupplier;
 
 /** Credential persistence only: does not authorize a Minecraft connection or grant OP. */
 public final class AuthRepository {
@@ -16,9 +17,15 @@ public final class AuthRepository {
     public record Account(UUID player, String name, Passwords.Hash password, long revision) {}
     private final Store store;
     private final String reservedOwner;
+    private final LongSupplier clock;
     public AuthRepository(Store store) { this(store, REQUESTED_OWNER); }
     public AuthRepository(Store store, String reservedOwner) {
+        this(store, reservedOwner, System::currentTimeMillis);
+    }
+    /** Package-private clock seam for deterministic expiry/queue tests, never client input. */
+    AuthRepository(Store store, String reservedOwner, LongSupplier clock) {
         this.store = Objects.requireNonNull(store); this.reservedOwner = name(reservedOwner);
+        this.clock = Objects.requireNonNull(clock);
     }
     public CompletableFuture<Void> start() {
         return store.tx(c -> {
@@ -36,10 +43,14 @@ public final class AuthRepository {
     /** Console/private provisioning only. Input is a SHA-256 digest of a random 256-bit token. */
     public CompletableFuture<Void> installOwnerChallenge(String digest, long expires, long now) {
         return store.tx(c -> {
-            require(validDigest(digest) && now > 0 && expires > now && expires - now <= 86_400_000L, "Invalid owner challenge");
+            long installedAt = executionTime(now);
+            require(validDigest(digest) && expires > now && expires - now <= 86_400_000L
+                    && expires > installedAt, "Invalid or expired owner challenge");
             require(Store.string(c, "SELECT uuid FROM auth_owner WHERE id=1") == null, "Owner is already bound");
             require(Store.update(c, "UPDATE auth_owner SET challenge_hash=?,expires=? WHERE id=1 AND uuid IS NULL", digest, expires) == 1, "Owner reservation missing");
-            audit(c, "console", "auth.owner-challenge", reservedOwner, now);
+            audit(c, "console", "auth.owner-challenge", reservedOwner, installedAt);
+            // A delay inside SQL must roll back the replacement and its audit together.
+            require(expires > executionTime(installedAt), "Owner challenge expired before installation");
             return null;
         });
     }
@@ -49,18 +60,21 @@ public final class AuthRepository {
                                                 String ownerChallengeDigest, long now) {
         return store.tx(c -> {
             Objects.requireNonNull(player); Objects.requireNonNull(password);
-            String normalized = name(nickname); require(now > 0, "Invalid timestamp");
+            String normalized = name(nickname); long registeredAt = executionTime(now);
             boolean reserved = normalized.equals(reservedOwner);
             if (reserved) {
-                String expected = Store.string(c, "SELECT challenge_hash FROM auth_owner WHERE id=1 AND uuid IS NULL AND expires>?", now);
+                String expected = Store.string(c, "SELECT challenge_hash FROM auth_owner WHERE id=1 AND uuid IS NULL AND expires>?", registeredAt);
                 require(validDigest(ownerChallengeDigest) && expected != null && MessageDigest.isEqual(
                         expected.getBytes(StandardCharsets.US_ASCII), ownerChallengeDigest.getBytes(StandardCharsets.US_ASCII)), "Owner account requires private bootstrap proof");
             } else require(ownerChallengeDigest == null, "Unexpected owner challenge");
             Store.update(c, "INSERT INTO auth_accounts(uuid,name,password_hash,revision,created) VALUES(?,?,?,1,?)",
-                    player.toString(), normalized, password.encoded(), now);
-            if (reserved) require(Store.update(c, "UPDATE auth_owner SET uuid=?,challenge_hash=NULL,expires=0 WHERE id=1 AND uuid IS NULL", player.toString()) == 1, "Owner binding conflict");
-            audit(c, player.toString(), reserved ? "auth.owner-bound" : "auth.register", normalized, now);
-            return find(c, player, normalized);
+                    player.toString(), normalized, password.encoded(), registeredAt);
+            Account account = find(c, player, normalized);
+            audit(c, player.toString(), reserved ? "auth.owner-bound" : "auth.register", normalized, registeredAt);
+            // Last SQL write before commit: expiry/hash CAS also rolls back account + audit on denial.
+            if (reserved) require(Store.update(c, "UPDATE auth_owner SET uuid=?,challenge_hash=NULL,expires=0 WHERE id=1 AND uuid IS NULL AND challenge_hash=? AND expires>?",
+                    player.toString(), ownerChallengeDigest, executionTime(registeredAt)) == 1, "Owner bootstrap expired or changed before binding");
+            return account;
         });
     }
     public CompletableFuture<Account> account(UUID player, String nickname) {
@@ -81,6 +95,12 @@ public final class AuthRepository {
             if (changed == 1) audit(c, player.toString(), "auth.password-changed", "credentials", now);
             return changed == 1;
         });
+    }
+    /** Request time is only a lower bound, not authority to extend a persisted deadline. */
+    private long executionTime(long requestedAt) throws SQLException {
+        long current = clock.getAsLong();
+        require(requestedAt > 0 && current > 0, "Invalid timestamp");
+        return Math.max(requestedAt, current);
     }
     private static Account find(Connection c, UUID player, String name) throws SQLException {
         try (var p = c.prepareStatement("SELECT password_hash,revision FROM auth_accounts WHERE uuid=? AND name=?")) {
