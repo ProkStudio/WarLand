@@ -4,6 +4,7 @@ Keep the existing 20,000-frame bound per phase; add a lifetime 60,000-frame /
 64MiB body budget over the longer success/search/backoff sequence. No lifetime-counter resets,
 no extra RTP attempts, no server timeout changes.
 Only packet counts/types and phase outcomes are recorded, never packet bodies.
+Each connection preserves its own private report; the latest report is only a compatibility view.
 """
 import argparse
 import json
@@ -11,6 +12,7 @@ import time
 from collections import Counter
 from pathlib import Path
 import rtp_runtime_smoke as rtp
+from rtp_metrics import ConnectionMetrics
 
 original_pump = rtp.pump
 
@@ -28,6 +30,7 @@ class ObservedWire(rtp.RetainedWire):
         self.total_bytes = 0
         self.packet_types = Counter()
         self.phases = []
+        self.metrics_store = ConnectionMetrics()
 
     def begin_phase(self):
         # Only the inherited short-phase counter resets. Lifetime counters never do.
@@ -70,7 +73,7 @@ def observed_pump(wire, duration, expected=None):
         phase['packets'] = wire.total_packets - before
         phase['seconds'] = round(time.monotonic() - started, 3)
         wire.phases.append(phase)
-        (rtp.runtime/'rtp-wire-metrics.json').write_text(json.dumps(wire.summary(), indent=2)+'\n')
+        wire.metrics_store.write(rtp.runtime, wire.summary())
 
 
 if __name__ == '__main__':
