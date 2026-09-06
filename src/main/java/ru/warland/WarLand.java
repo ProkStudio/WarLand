@@ -9,6 +9,7 @@ import ru.warland.auth.AuthPayloads;
 import ru.warland.combat.CombatFeature;
 import ru.warland.core.CoreRuntime;
 import ru.warland.core.SurvivalTransit;
+import ru.warland.help.OwnerHelp;
 import ru.warland.moderation.Moderation;
 import ru.warland.rtp.RtpService;
 
@@ -19,7 +20,7 @@ public final class WarLand implements ModInitializer {
         AuthPayloads.register();
         CombatFeature.registerItems();
         if(FabricLoader.getInstance().getEnvironmentType()==EnvType.CLIENT)return;
-        try{CoreRuntime runtime=new CoreRuntime();runtime.initialize();Moderation.register(runtime);SurvivalTransit.register(runtime);RtpService.register(runtime);}
+        try{CoreRuntime runtime=new CoreRuntime();runtime.initialize();Moderation.register(runtime);SurvivalTransit.register(runtime);RtpService.register(runtime);OwnerHelp.register(runtime);}
         catch(Exception e){throw new IllegalStateException("WarLand failed closed during initialization",e);}
     }
 }
