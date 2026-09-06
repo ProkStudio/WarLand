@@ -14,7 +14,7 @@ class RtpPolicyTest {
     static final RtpPolicy.Cell AIR = new RtpPolicy.Cell(true, true, false, false, false, false);
     static final RtpPolicy.Cell ROCK = new RtpPolicy.Cell(false, false, true, false, false, false);
     static final RtpPolicy.Cell WATER = new RtpPolicy.Cell(false, true, false, true, false, false);
-    static final RtpPolicy.Cell HAZARD = new RtpPolicy.Cell(false, false, true, false, true, false);
+    static final RtpPolicy.Cell HAZARD_CELL = new RtpPolicy.Cell(false, false, true, false, true, false);
     record P(int x, int y, int z) {}
     record Column(int x, int z) {}
     static class Site implements RtpPolicy.Terrain {
@@ -29,7 +29,7 @@ class RtpPolicyTest {
         public int topY() { return top; }
         public int surfaceY(int x, int z) { return surface; }
         public boolean insideBorder(int x, int z) { return !outside.contains(new Column(x, z)); }
-        public boolean protectedColumn(int x, int z) { return protectedColumns.contains(new Column(x, z)); }
+        public boolean protectedColumn(int x, int z) { return !protectedColumns.contains(new Column(x, z)) ? false : true; }
         public RtpPolicy.Cell cell(int x, int y, int z) {
             cellReads++;
             assertEquals(X >> 4, x >> 4, "Safety checks must not spill into another chunk");
@@ -109,7 +109,7 @@ class RtpPolicyTest {
     }
     @Test void hazardNeighborsIncludeTheEntireRing() {
         for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
-            Site site = new Site(); site.set(dx, -1, dz, HAZARD); assertEquals(HAZARD, site.assess());
+            Site site = new Site(); site.set(dx, -1, dz, HAZARD_CELL); assertEquals(HAZARD, site.assess());
         }
     }
     @Test void dangerousAndUnknownBlocksFailClosed() {
