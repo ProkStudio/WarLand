@@ -17,10 +17,15 @@
     "AuthPlayMixin",
     "AuthPlayerMixin",
     "AuthPickupMixin",
-    "AuthModerationMixin"
+    "AuthModerationMixin",
+    "OfflineServerKeyMixin",
+    "OfflineLoginMixin",
+    "OfflineStartupMixin",
+    "OfflineAdmissionMixin"
   ],
   "client": [
-    "AuthClientConnectionAccess"
+    "AuthClientConnectionAccess",
+    "OfflineClientPinMixin"
   ],
   "injectors": {
     "defaultRequire": 1
