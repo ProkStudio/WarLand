@@ -17,9 +17,16 @@ public final class Admission {
     public Admission() { this(System::nanoTime); }
     public Admission(LongSupplier clock) { this.clock = Objects.requireNonNull(clock); }
 
-    public synchronized UUID open(UUID player) {
+    /** Explicit generation replacement for trusted callers; never use for network admission. */
+    public synchronized UUID open(UUID player) { return open(player, false); }
+
+    /** Reserve a UUID without invalidating an incumbent pending or authenticated connection. */
+    public synchronized UUID reserve(UUID player) { return open(player, true); }
+
+    private UUID open(UUID player, boolean exclusive) {
         Objects.requireNonNull(player); long now = clock.getAsLong();
         sessions.values().removeIf(s -> !valid(s, now));
+        if (exclusive && sessions.containsKey(player)) throw new IllegalStateException("Authentication unavailable");
         if (!sessions.containsKey(player) && sessions.size() >= 128) throw new IllegalStateException("Authentication capacity reached");
         UUID nonce = UUID.randomUUID(); sessions.put(player, new Session(nonce, now, false)); return nonce;
     }

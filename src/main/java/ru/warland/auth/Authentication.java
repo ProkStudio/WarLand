@@ -24,10 +24,17 @@ public final class Authentication implements AutoCloseable {
     public Authentication(AuthRepository repository, Admission admission, Admission.Throttle throttle) {
         this.repository = Objects.requireNonNull(repository); this.admission = Objects.requireNonNull(admission); this.throttle = Objects.requireNonNull(throttle);
     }
-    public Connection open(UUID player, String name, String peer) {
+    /** Trusted generation replacement only. Network adapters must call reserve instead. */
+    public Connection open(UUID player, String name, String peer) { return open(player, name, peer, false); }
+
+    /** Reject duplicate admission before cancelling or replacing any incumbent work. */
+    public Connection reserve(UUID player, String name, String peer) { return open(player, name, peer, true); }
+
+    private Connection open(UUID player, String name, String peer, boolean exclusive) {
         if (closed || peer == null || peer.isBlank() || peer.length() > 128) throw new IllegalStateException("Authentication unavailable");
         String canonical = AuthRepository.name(name);
-        Connection current = new Connection(player, admission.open(player), canonical, peer);
+        UUID nonce = exclusive ? admission.reserve(player) : admission.open(player);
+        Connection current = new Connection(player, nonce, canonical, peer);
         for (Request r : requests) if (r.connection.player().equals(player) && !r.connection.nonce().equals(current.nonce())) r.cancel();
         return current;
     }
