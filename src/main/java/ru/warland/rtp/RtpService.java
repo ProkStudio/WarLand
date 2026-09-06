@@ -341,8 +341,13 @@ public final class RtpService {
     private void releaseChunk(Request r) {
         if (r.chunk == null) return;
         ChunkPos owned = r.chunk;
-        r.chunk = null; r.destination = null;
-        r.world.getChunkManager().removeTicket(ticket, owned, 0);
+        try { r.world.getChunkManager().removeTicket(ticket, owned, 0); }
+        catch (RuntimeException error) {
+            // An ambiguous release must not admit another ticket before the expiry fallback.
+            // Pause this service until restart rather than weaken the one-ticket invariant.
+            stopping = true;
+            throw error;
+        } finally { r.chunk = null; r.destination = null; }
     }
 
     private void finish(Request r, String message, long backoff) {
