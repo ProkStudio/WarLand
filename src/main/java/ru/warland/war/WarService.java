@@ -30,6 +30,7 @@ public final class WarService {
         repository = new WarRepository(db, config, System::currentTimeMillis);
     }
     public List<War> wars() { return cache.wars(); }
+    public String windowLabel(War war) { Schedule value=cache.schedules().get(war.id()); return value==null?"Расписание недоступно":value.label(); }
     public boolean window(War w, long now) {
         Schedule schedule = cache.schedules().get(w.id());
         return config.enableWarCapture && w.status().equals("ACTIVE") && schedule != null && schedule.open(now, w.starts(), w.ends());
