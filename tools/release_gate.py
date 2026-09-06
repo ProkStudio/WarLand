@@ -115,30 +115,40 @@ def inspect_mod(parent_fd: int, name: str):
         return mod, digest.hexdigest()
 
 
+def mod_inventory(fd: int):
+    """Bounded no-follow name/stat snapshot, including non-JAR entries."""
+    manifest = {}
+    names = []
+    total_bytes = 0
+    with os.scandir(fd) as entries:
+        for count, entry in enumerate(entries, 1):
+            if count > MAX_MOD_ENTRIES:
+                raise ValueError('Too many mod directory entries')
+            info = entry.stat(follow_symlinks=False)
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError('Non-flat or linked mod layout is unsupported')
+            manifest[entry.name] = (fingerprint(info), info.st_mode, info.st_nlink)
+            if entry.name.lower().endswith('.jar'):
+                names.append(entry.name)
+                total_bytes += info.st_size
+                if len(names) > MAX_MOD_JARS or total_bytes > MAX_MODS_BYTES:
+                    raise ValueError('Mod inventory exceeds inspection limits')
+    return manifest, sorted(names)
+
+
 def installed_artifact(runtime: Path, expected_sha: str):
     """Only a standard flat mods directory is supported; no loader execution."""
     with directory_fd(runtime / 'mods') as fd:
         before = fingerprint(os.fstat(fd))
-        names = []
-        total_bytes = 0
-        with os.scandir(fd) as entries:
-            for count, entry in enumerate(entries, 1):
-                if count > MAX_MOD_ENTRIES:
-                    raise ValueError('Too many mod directory entries')
-                info = entry.stat(follow_symlinks=False)
-                if not stat.S_ISREG(info.st_mode):
-                    raise ValueError('Non-flat or linked mod layout is unsupported')
-                if entry.name.lower().endswith('.jar'):
-                    names.append(entry.name)
-                    total_bytes += info.st_size
-                    if len(names) > MAX_MOD_JARS or total_bytes > MAX_MODS_BYTES:
-                        raise ValueError('Mod inventory exceeds inspection limits')
+        manifest, names = mod_inventory(fd)
         warland_hashes = []
-        for name in sorted(names):
+        for name in names:
             mod, digest = inspect_mod(fd, name)
             if mod['id'] == 'warland':
                 warland_hashes.append(digest)
-        if before != fingerprint(os.fstat(fd)):
+        after_manifest, after_names = mod_inventory(fd)
+        if (manifest != after_manifest or names != after_names
+                or before != fingerprint(os.fstat(fd))):
             raise ValueError('Mod directory changed during inspection')
         if len(warland_hashes) != 1:
             raise ValueError('Exactly one installed WarLand mod is required')
