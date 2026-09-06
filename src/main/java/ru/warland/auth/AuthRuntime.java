@@ -34,6 +34,7 @@ public final class AuthRuntime implements AutoCloseable {
     private final Map<ClientConnection, Session> sessions = new ConcurrentHashMap<>();
     private volatile boolean closed;
     private final AtomicBoolean provisioning = new AtomicBoolean();
+    private static final Text TIMED_OUT = Text.literal("WarLand: время на вход истекло (2 минуты). Подключитесь заново.");
     private static final Text DENIED = Text.literal("WarLand: безопасная авторизация недоступна. Повторите вход через Minecraft 1.21.11.");
     private static final class Session {
         final ServerConfigurationNetworkHandler configuration;
@@ -62,7 +63,13 @@ public final class AuthRuntime implements AutoCloseable {
             for (var entry : sessions.entrySet()) {
                 Session s = entry.getValue();
                 if (!entry.getKey().isOpen() || (s.released ? !engine.authenticated(s.identity) : System.nanoTime() - s.opened >= TimeUnit.SECONDS.toNanos(120))) {
-                    remove(entry.getKey(), s); entry.getKey().disconnect(DENIED);
+                    remove(entry.getKey(), s);
+                    // Send a protocol disconnect, not just a raw channel close, so vanilla
+                    // can leave its dialog and display the actual deadline failure.
+                    if (entry.getKey().isOpen()) {
+                        if (s.play != null) s.play.disconnect(DENIED);
+                        else s.configuration.disconnect(s.released ? DENIED : TIMED_OUT);
+                    }
                 }
             }
         });
@@ -144,6 +151,10 @@ public final class AuthRuntime implements AutoCloseable {
                             || !c.isEncrypted() || !NativeAuthDialog.nonceMatches(packet, s.identity.nonce())) return;
                     if (NativeAuthDialog.CANCEL.equals(packet.id())) {
                         remove(c, s); handler.disconnect(Text.literal("Авторизация отменена")); return;
+                    }
+                    var feedback = NativeAuthDialog.inputFeedback(packet);
+                    if (feedback != null) {
+                        handler.sendPacket(NativeAuthDialog.show(s.identity.nonce(), feedback)); return;
                     }
                     try (var request = NativeAuthDialog.decode(packet, s.identity.nonce())) {
                         if (!request.valid()) { handler.sendPacket(NativeAuthDialog.show(s.identity.nonce(), true)); return; }

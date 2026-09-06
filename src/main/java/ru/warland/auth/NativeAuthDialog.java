@@ -26,15 +26,43 @@ public final class NativeAuthDialog {
     private NativeAuthDialog() {}
     public static boolean enabled() { return Boolean.getBoolean("warland.vanillaClient"); }
 
+    /** Only public input-shape feedback. Never expose account existence or password validity. */
+    public enum Feedback {
+        WELCOME("Первый вход: придумайте пароль и нажмите «Регистрация». Затем используйте «Войти»."),
+        DENIED("Вход отклонён. Проверьте данные; после нескольких попыток подождите минуту и подключитесь заново."),
+        PASSWORD_LENGTH("Пароль должен содержать от 12 до 128 символов. Это ваш новый пароль WarLand, не код владельца."),
+        CONFIRMATION("Пароли в двух полях не совпадают. Для регистрации введите один и тот же пароль дважды."),
+        OWNER_FORMAT("Код владельца: ровно 43 символа без пробелов. Остальным игрокам это поле нужно оставить пустым.");
+        private final String message;
+        Feedback(String message) { this.message = message; }
+        public String message() { return message; }
+    }
+    public static Feedback inputFeedback(CustomClickActionC2SPacket packet) {
+        if (!bounded(packet)) return Feedback.DENIED;
+        if (CANCEL.equals(packet.id())) return null;
+        var n = (NbtCompound) packet.payload().orElseThrow();
+        String password = n.getString("password").orElse("");
+        if (password.length() < 12 || password.length() > 128) return Feedback.PASSWORD_LENGTH;
+        if (REGISTER.equals(packet.id())) {
+            if (!password.equals(n.getString("confirmation").orElse(""))) return Feedback.CONFIRMATION;
+            String owner = n.getString("owner").orElse("");
+            if (!owner.isEmpty() && !owner.matches("[A-Za-z0-9_-]{43}")) return Feedback.OWNER_FORMAT;
+        }
+        return null;
+    }
     public static ShowDialogS2CPacket show(UUID nonce, boolean denied) {
+        return show(nonce, denied ? Feedback.DENIED : Feedback.WELCOME);
+    }
+    public static ShowDialogS2CPacket show(UUID nonce, Feedback feedback) {
         var common = new DialogCommonData(Text.literal("WarLand — вход"), Optional.empty(), false, false,
-            AfterAction.WAIT_FOR_RESPONSE,
-            List.of(new PlainMessageDialogBody(Text.literal(denied
-                ? "Вход отклонён. Проверьте данные или подождите перед повтором."
-                : "Первый вход: придумайте пароль и нажмите «Регистрация». Затем используйте «Войти»."), 300),
+            // NONE keeps the real dialog mounted so ClearDialog also closes it.
+            // A dropped/stale request must not trap vanilla on WaitingForResponseScreen.
+            AfterAction.NONE,
+            List.of(new PlainMessageDialogBody(Text.literal(feedback.message()), 300),
+                new PlainMessageDialogBody(Text.literal("Окно входа действует 2 минуты. Если время истекло, подключитесь заново. После отказа заполните очищенные поля повторно."), 300),
                 new PlainMessageDialogBody(Text.literal("Пароль 12–128 символов. Ввод виден на экране: не показывайте его посторонним. Используйте отдельный пароль только для WarLand."), 300)),
             List.of(field("password", "Пароль", 128), field("confirmation", "Повтор — для регистрации", 128),
-                field("owner", "Код владельца — остальным оставить пустым", 43)));
+                field("owner", "Одноразовый код владельца — не пароль", 43)));
         return new ShowDialogS2CPacket(RegistryEntry.of(new MultiActionDialog(common,
             List.of(button("Войти", LOGIN, nonce), button("Регистрация", REGISTER, nonce)),
             Optional.of(button("Отключиться", CANCEL, nonce)), 2)));
