@@ -1,21 +1,24 @@
 # Native login wait-screen hotfix
 
-2026-09-06; user-reported vanilla GUI wait after rejected login/registration. Candidate version `0.1.0-alpha.3.1`, branch `agent/release-20260906-1633/auth-dialog-wait`. This is a narrow hotfix candidate, not the completed stable release and not a replacement of the immutable alpha.3 release assets.
+**0.1.0-alpha.3.1 deployed successfully on 2026-09-06 at17:04:30UTC.** Current operator checkpoint: [AUTH_WAIT_STATUS.md](https://github.com/ProkStudio/WarLand/blob/main/AUTH_WAIT_STATUS.md).
 
-## Evidence before the change
-The production server, SQLite worker and KDF worker were responsive. Two actual configuration sessions reached the 120-second timeout without completing account registration. No password or owner code was logged or published.
+Exact tested game source `79580f8c1f97cc446d32e44031660e5710da6a7a`; deployed JAR SHA256 `65a9627f959e5767290eda576766d98a99807097f072eb5730f1e62402b85e77`. This later commit changes this document only. Existing alpha.3 release tag/assets were not overwritten; a separate3.1 release asset has not yet been published. This is not stable/#15 completion.
 
-An exact-alpha.3 isolated synthetic reserved-owner matrix passed: missing-account login denial, short-password denial, wrong synthetic proof denial, valid-proof registration, required pack/PLAY/balance; clean restart, wrong-password denial and login. Compression256, stable identity, one synthetic starter grant, SQLite/FK clean. This does not reproduce the reporting user's exact client/input or prove their GUI works.
+## What changed
+- AfterAction.NONE keeps the actual login dialog mounted, instead of stranding ignored/stale requests on WaitingForResponseScreen. Vanilla's ordinary clear-dialog handler does not itself dismiss that separate waiting screen.
+- Public input-shape feedback for password length, confirmation mismatch and owner-code format; no disclosure of account existence or password correctness.
+- Explicit two-minute deadline message and protocol disconnect at expiry.
+- No relaxation of nonce/schema/type/size/encryption/session/KDF/rate-limit/owner-proof/pre-PLAY guards. No name-only owner/OP, password reset, real account registration by the agent, data migration or feature-flag changes.
 
-Source inspection of Minecraft1.21.11 confirms the dialog transitions to a separate WaitingForResponseScreen with WAIT_FOR_RESPONSE; the ordinary clear-dialog handler does not itself dismiss that separate screen. WarLand also deliberately drops stale/malformed/noncurrent actions. Such ignored actions must not leave the user stranded on a waiting overlay.
+## Verified evidence
+- Clean exact-source build: Java479 detected/475passed/4pre-existing registry-dependent skips/0failures; Python210 passed. Files were byte-compared with GitHub.
+- Initial new tests that tried registry-dependent dialog constructors under plain JUnit failed (2); that FAILED evidence is retained. Final ordinary tests honestly cover input policy and source wiring. Actual dialog construction/encoding is checked on a booted Fabric server, not described as plain-JVM rendering acceptance.
+- Fresh synthetic reserved-owner matrix: missing-account login denial → short-password feedback → wrong proof denial → correct registration → required pack/PLAY/balance; clean restart → wrong-password denial → successful login. Compression256; actual after_action=none observed on every initial and denied dialog, one starter grant, stable identity, SQLite/FK clean, two exit0 shutdowns, no server errors or secret canaries.
+- Service-bound deployment, zero online players, private full-runtime archive and tar read-back comparison. Original identity and baseline profile/account/balance/ledger/owner rows preserved. New startup had no errors; production native probe observed NONE and cancelled without registering an account. Code rollback was not needed.
 
-## Change
-- Keep the actual dialog mounted with AfterAction.NONE, so a dropped request does not create an indefinite waiting screen and ClearDialog works against the current dialog.
-- Explain public input-shape errors (password length, confirmation mismatch, owner-code format) without exposing account existence or password validity.
-- Explain the two-minute configuration deadline and send a proper protocol disconnect when it expires, instead of only closing the channel.
-- Keep nonce/schema/type/size/encryption/current-session guards, KDF/rate limits, owner proof, reserved name and pre-PLAY barrier unchanged. No name-only owner/OP, new real account, credential reset, DB migration or feature flag change.
+## Limits and recovery
+The exact original user input/GUI failure was not reproduced by synthetic wire tests; the affected user must reconnect and confirm actual client entry after the change. No new visual acceptance on the user's device or full120-second timeout runtime matrix is claimed.
 
-## Verification / continuation
-Eleven added regressions cover real dialog mode, input feedback and source-level timeout wiring; full exact-source Java/Python build is pending at this checkpoint. Do not deploy unless build, fresh isolated exact-JAR owner/retry/restart and safe backup checks pass. Actual GUI acceptance must be separately recorded; wire tests do not prove rendering. Working checkout `/opt/warland-build/auth-dialog-fix-20260906-1643`, build logs `/opt/warland-build/auth-ui-fix-{java,python}-v1.*`. Prior QA evidence `/opt/warland-build/vanilla-dialog-qa-owner-retry-v1/result.json`.
+Archive `/var/backups/warland-auth-dialog-20260906-170355`; procedure/evidence `/opt/warland-ops/auth-dialog-hotfix-20260906/`. Old JAR retained under runtime/retired-auth-dialog-20260906-170355. A rollback restores code only, NEVER an older database over newer player actions. All keys/accounts/worlds/backups stay private.
 
-No live credentials, account records, worlds, runtime configurations or private backup contents belong in GitHub. The previous owner code may expire during debugging: issue a new private 15-minute proof only if the real owner is still unbound; do not reuse a synthetic QA proof. A code rollback must preserve all player data created since the backup.
+Checkout `/opt/warland-build/auth-dialog-fix-20260906-1643`; native evidence `/opt/warland-build/vanilla-dialog-qa-owner-hotfix-v2/result.json`. Owner-retry/compression helpers remain preserved as untracked files in checkout/tools and require a separate cleanup/publication task; they are not part of the tested game-source commit. Own build/deployment locks are released in #12. A fresh owner proof is shared privately only while the actual owner remains unbound; no proof/password belongs here.
