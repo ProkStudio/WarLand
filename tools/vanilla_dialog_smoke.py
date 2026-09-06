@@ -14,7 +14,7 @@ def action(nonce, password, registration, kind=None):
     def utf(s):
         b=s.encode('utf-8');return struct.pack('>H',len(b))+b
     nbt=b'\x0a'+b''.join(b'\x08'+utf(k)+utf(v) for k,v in values.items())+b'\x00'
-    return base.text('warland:auth/'+(kind or ('register' if registration else 'login')))+b'\x01'+nbt
+    return base.text('warland:auth/'+(kind or ('register' if registration else 'login')))+base.blob(nbt)
 
 def probe(port, pin, password, mode, pack_url, pack_hash):
     from cryptography.hazmat.primitives import serialization
@@ -77,7 +77,7 @@ def probe(port, pin, password, mode, pack_url, pack_hash):
                     if not result.get('barrier_cleared') or not result['pack_downloaded']:raise ValueError('Premature PLAY release')
                     w.send(3);phase='play'
                 elif p==2:
-                    if mode=='cancel':result['cancelled']=True;return result
+                    if mode=='cancel' and 'Авторизация отменена'.encode() in b:result['cancelled']=True;return result
                     raise ValueError('Configuration disconnect')
             else:
                 if p==0x30:result['play']=True;w.send(0x2b)
