@@ -10,8 +10,11 @@ import ru.warland.auth.AuthPacketGate;
 @Mixin(value=ServerCommonNetworkHandler.class, priority=3000)
 public abstract class AuthCommonMixin {
  @Inject(method="onCustomClickAction", at=@At("HEAD"), cancellable=true)
- private void warland$dialogAction(CallbackInfo ci) {
+ private void warland$dialogAction(net.minecraft.network.packet.c2s.common.CustomClickActionC2SPacket packet, CallbackInfo ci) {
   CoreRuntime r=CoreRuntime.INSTANCE;
+  if(r!=null && (Object)this instanceof net.minecraft.server.network.ServerConfigurationNetworkHandler config) {
+   ci.cancel(); r.auth.queueDialog(config,packet); return;
+  }
   if(r!=null&&(!((Object)this instanceof ServerPlayNetworkHandler play)||!r.authorized(play.player)))ci.cancel();
  }
  @Inject(method="onCustomPayload", at=@At("HEAD"), cancellable=true)

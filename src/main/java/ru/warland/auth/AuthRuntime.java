@@ -16,6 +16,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.*;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.c2s.common.CustomClickActionC2SPacket;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.*;
 import net.minecraft.text.Text;
@@ -33,12 +34,14 @@ public final class AuthRuntime implements AutoCloseable {
     private final Map<ClientConnection, Session> sessions = new ConcurrentHashMap<>();
     private volatile boolean closed;
     private final AtomicBoolean provisioning = new AtomicBoolean();
-    private static final Text DENIED = Text.literal("WarLand: безопасная авторизация недоступна. Переподключитесь с клиентом WarLand.");
+    private static final Text DENIED = Text.literal("WarLand: безопасная авторизация недоступна. Повторите вход через Minecraft 1.21.11.");
     private static final class Session {
         final ServerConfigurationNetworkHandler configuration;
         final Authentication.Connection identity;
         final long opened = System.nanoTime();
         final AtomicBoolean busy = new AtomicBoolean();
+        final AtomicBoolean dialogQueued = new AtomicBoolean();
+        final boolean vanilla = NativeAuthDialog.enabled();
         volatile boolean sent, released, owner, profileReady;
         volatile ServerPlayNetworkHandler play;
         Session(ServerConfigurationNetworkHandler h, Authentication.Connection identity) { this.configuration = h; this.identity = identity; }
@@ -72,7 +75,7 @@ public final class AuthRuntime implements AutoCloseable {
     private synchronized void configure(ServerConfigurationNetworkHandler handler, net.minecraft.server.MinecraftServer server) {
         ClientConnection connection = connection(handler);
         if (closed || !runtime.ready() || !RuntimePolicy.secure(server.isOnlineMode(), connection.isEncrypted())
-                || ServerConfigurationNetworking.isReconfiguring(handler) || !ServerConfigurationNetworking.canSend(handler, AuthPayloads.Challenge.ID)
+                || ServerConfigurationNetworking.isReconfiguring(handler) || (!NativeAuthDialog.enabled() && !ServerConfigurationNetworking.canSend(handler, AuthPayloads.Challenge.ID))
                 || sessions.containsKey(connection) || sessions.size() >= 128
                 || !(connection.getAddress() instanceof InetSocketAddress address) || address.getAddress() == null) {
             handler.disconnect(DENIED); return;
@@ -86,7 +89,8 @@ public final class AuthRuntime implements AutoCloseable {
                 public void sendPacket(Consumer<Packet<?>> sender) {
                     if (!current(connection, session)) { handler.disconnect(DENIED); return; }
                     session.sent = true;
-                    sender.accept(ServerConfigurationNetworking.createS2CPacket(new AuthPayloads.Challenge(session.identity.nonce(), 0)));
+                    if (session.vanilla) sender.accept(NativeAuthDialog.show(session.identity.nonce(), false));
+                    else sender.accept(ServerConfigurationNetworking.createS2CPacket(new AuthPayloads.Challenge(session.identity.nonce(), 0)));
                 }
             });
         } catch (RuntimeException unavailable) { disconnect(handler); handler.disconnect(DENIED); }
@@ -109,13 +113,49 @@ public final class AuthRuntime implements AutoCloseable {
                     s.busy.set(false);
                     if (!current(connection, s) || s.released) return;
                     if (error != null) { remove(connection, s); handler.disconnect(DENIED); return; }
-                    if (!outcome.success()) { ServerConfigurationNetworking.send(handler, new AuthPayloads.Challenge(s.identity.nonce(), 1)); return; }
+                    if (!outcome.success()) {
+                        if (s.vanilla) handler.sendPacket(NativeAuthDialog.show(s.identity.nonce(), true));
+                        else ServerConfigurationNetworking.send(handler, new AuthPayloads.Challenge(s.identity.nonce(), 1));
+                        return;
+                    }
                     if (!engine.authenticated(s.identity)) { remove(connection, s); handler.disconnect(DENIED); return; }
                     s.owner = outcome.owner(); s.released = true;
-                    ServerConfigurationNetworking.send(handler, new AuthPayloads.Challenge(s.identity.nonce(), 2));
+                    if (s.vanilla) handler.sendPacket(net.minecraft.network.packet.s2c.common.ClearDialogS2CPacket.INSTANCE);
+                    else ServerConfigurationNetworking.send(handler, new AuthPayloads.Challenge(s.identity.nonce(), 2));
                     handler.completeTask(TASK);
                 }));
         } catch (RuntimeException invalid) { if (s != null) remove(connection, s); handler.disconnect(DENIED); }
+    }
+    /** Netty admission check; repeated on the owning server thread before consuming credentials. */
+    public boolean acceptsDialog(ServerConfigurationNetworkHandler handler, CustomClickActionC2SPacket packet) {
+        ClientConnection c = connection(handler); Session s = sessions.get(c);
+        return s != null && s.vanilla && s.configuration == handler && s.sent && !s.released
+            && !s.busy.get() && !s.dialogQueued.get() && c.isEncrypted() && current(c, s)
+            && NativeAuthDialog.nonceMatches(packet, s.identity.nonce());
+    }
+    public void queueDialog(ServerConfigurationNetworkHandler handler, CustomClickActionC2SPacket packet) {
+        if (!acceptsDialog(handler, packet)) return;
+        ClientConnection c = connection(handler); Session s = sessions.get(c);
+        if (s == null || !s.dialogQueued.compareAndSet(false, true)) return;
+        try {
+            runtime.server().execute(() -> {
+                try {
+                    if (!current(c, s) || s.released || !s.vanilla || s.busy.get()
+                            || !c.isEncrypted() || !NativeAuthDialog.nonceMatches(packet, s.identity.nonce())) return;
+                    if (NativeAuthDialog.CANCEL.equals(packet.id())) {
+                        remove(c, s); handler.disconnect(Text.literal("Авторизация отменена")); return;
+                    }
+                    try (var request = NativeAuthDialog.decode(packet, s.identity.nonce())) {
+                        if (!request.valid()) { handler.sendPacket(NativeAuthDialog.show(s.identity.nonce(), true)); return; }
+                        receive(handler, request);
+                    }
+                } catch (RuntimeException invalid) {
+                    remove(c, s); handler.disconnect(DENIED);
+                } finally { s.dialogQueued.set(false); }
+            });
+        } catch (RuntimeException unavailable) {
+            s.dialogQueued.set(false); remove(c, s); handler.disconnect(DENIED);
+        }
     }
     private record Outcome(boolean success, boolean owner) {}
     private boolean current(ClientConnection c, Session s) {
