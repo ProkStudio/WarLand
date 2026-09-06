@@ -79,7 +79,7 @@ public final class AuthRuntime implements AutoCloseable {
         }
         try {
             var profile = ((AuthCommonAccess) handler).warland$profile();
-            Session session = new Session(handler, engine.open(profile.id(), profile.name(), address.getAddress().getHostAddress()));
+            Session session = new Session(handler, engine.reserve(profile.id(), profile.name(), address.getAddress().getHostAddress()));
             sessions.put(connection, session);
             handler.addTask(new ServerPlayerConfigurationTask() {
                 public Key getKey() { return TASK; }
