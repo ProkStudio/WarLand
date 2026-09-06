@@ -1,0 +1,8 @@
+{
+  "files": [
+    {"path":"fabric-server-launch.jar","url":"https://meta.fabricmc.net/v2/versions/loader/1.21.11/0.19.5/1.1.2/server/jar","sha256":"2b63d293be54c8f5484a242859cab841dcee38511e11b2f82e92211f19872d08"},
+    {"path":"mods/fabric-api-0.141.6+1.21.11.jar","url":"https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.141.6+1.21.11/fabric-api-0.141.6+1.21.11.jar","sha256":"bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"},
+    {"path":"mods/polymer-bundled-0.15.2+1.21.11.jar","url":"https://cdn.modrinth.com/data/xGdtZczs/versions/wugBT1fU/polymer-bundled-0.15.2%2B1.21.11.jar","sha256":"2dfc65322e8ac7caed28cdd9a9836516c75fa880494112c03b4ee85ddccf44ed"}
+  ],
+  "java": {"url":"https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz","sha256":"2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500","version":"21.0.12.1+1","license":"GPL-2.0 with Classpath Exception","source":"https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.12.1%2B1"}
+}
