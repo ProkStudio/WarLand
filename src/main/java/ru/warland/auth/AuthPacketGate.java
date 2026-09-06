@@ -22,6 +22,7 @@ public final class AuthPacketGate {
        || packet instanceof PlayerSessionC2SPacket;
    return control ? !r.auth.authenticated(play.player) : !r.authorized(play.player);
   }
+  if (listener instanceof ServerConfigurationNetworkHandler && packet instanceof CustomClickActionC2SPacket) return true;
   if (listener instanceof ServerConfigurationNetworkHandler config && packet instanceof CustomPayloadC2SPacket p) {
    if (r.auth.configurationReleased(config)) return false;
    var id = p.payload().getId().id();
