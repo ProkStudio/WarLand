@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0-alpha.2",
+  "minecraft": "1.21.11",
+  "fabric_loader": "0.19.5",
+  "fabric_api": "0.141.6+1.21.11",
+  "fabric_api_sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+  "server": "201.51.10.116:25565",
+  "server_fingerprint": "f7c01003a649b67b97791091e687c9ee3ac275affc15dcf585a2f34df2efac8f",
+  "game_source_commit": "2a89fa966f0f3fabf90d785fc22aaebb52655db1",
+  "phase": "limited-alpha"
+}

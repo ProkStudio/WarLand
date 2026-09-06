@@ -1,0 +1,57 @@
+name: Publish tested alpha client
+on:
+  push:
+    branches: ['release/0.1.0-alpha.2']
+    paths: ['src/**', 'build.gradle', 'gradle.properties', 'release/**', 'tools/package_client.py', '.github/workflows/publish-alpha.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: warland-alpha-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build exact alpha source and test
+        run: |
+          python3 tools/build.py -Pmod_version=0.1.0-alpha.2 clean test build
+          PYTHONPATH=tools python3 -m unittest discover -s tools/tests -v
+      - name: Package credential-free client
+        shell: bash
+        run: |
+          set -euo pipefail
+          API=$(find "$HOME/.gradle/caches/modules-2/files-2.1/net.fabricmc.fabric-api/fabric-api/0.141.6+1.21.11" -name '*.jar' -print -quit)
+          test -n "$API"
+          mkdir -p dist
+          python3 tools/package_client.py --jar build/libs/warland-0.1.0-alpha.2.jar --fabric-api "$API" --out dist/WarLand-0.1.0-alpha.2-client.zip
+          cp build/libs/warland-0.1.0-alpha.2.jar dist/
+          cp docs/ALPHA_JOIN.md dist/START_HERE_RU.md
+          (cd dist && sha256sum *.jar *.zip > SHA256SUMS.txt)
+      - name: Publish immutable prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view v0.1.0-alpha.2 >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to replace its assets.'
+            exit 1
+          fi
+          gh release create v0.1.0-alpha.2 dist/* --target "$GITHUB_SHA" --title 'WarLand 0.1.0-alpha.2 — playable alpha' --notes-file docs/ALPHA_RELEASE.md --prerelease
+      - name: Preserve build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-release-evidence-${{ github.sha }}
+          path: |
+            build/test-results/test/*.xml
+            build/reports/tests/test/
+            dist/
