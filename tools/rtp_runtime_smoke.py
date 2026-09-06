@@ -45,6 +45,9 @@ def state():
         rows = db.execute("SELECT json FROM state WHERE namespace='rtp.cooldown.v1' AND key=?", (str(suite.IDENTITY),)).fetchall()
         return [int(row[0]) for row in rows]
 
+class ColdLoadRejected(Exception):
+    """Expected bounded cold-generation refusal, not a successful teleport."""
+
 def pump(wire, duration, expected=None):
     deadline = time.monotonic() + duration
     last_ground = 0
@@ -71,6 +74,8 @@ def pump(wire, duration, expected=None):
         elif packet == 0x77:
             # Raw system-message bytes only used for matching; no credential content is recorded.
             messages.append(body)
+            if expected == 'Вы прибыли в безопасную точку Верхнего мира' and 'Загрузка местности заняла слишком долго; RTP отменён.'.encode() in body:
+                raise ColdLoadRejected('Bounded cold-chunk timeout')
             if expected is not None and expected.encode() in body:
                 return messages
     if expected is not None:
@@ -102,7 +107,21 @@ def rtp_probe(port, pin, password, mode, pack_url, pack_hash):
         else:
             if before:
                 raise ValueError('Fresh synthetic account unexpectedly has RTP state')
-            pump(wire, 50, 'Вы прибыли в безопасную точку Верхнего мира')
+            rejected = 0
+            origin = wire.position
+            for attempt in range(3):
+                try:
+                    pump(wire, 50, 'Вы прибыли в безопасную точку Верхнего мира')
+                    break
+                except ColdLoadRejected:
+                    rejected += 1
+                    if state() or wire.position != origin:
+                        raise ValueError('Rejected cold load changed cooldown or player position')
+                    if attempt == 2:
+                        raise ValueError('Three bounded cold-load refusals; positive RTP acceptance NOT established')
+                    pump(wire, 31)  # Respect the existing global 30-second cold-load backoff.
+                    wire.send(0x06, suite.base.text('rtp'))
+            result['rtp_cold_load_refusals_without_state_change'] = rejected
             after = state()
             if len(after) != 1 or after[0] <= int(time.time() * 1000):
                 raise ValueError('Successful RTP has no durable cooldown')
@@ -112,7 +131,7 @@ def rtp_probe(port, pin, password, mode, pack_url, pack_hash):
             # this wire harness does not independently decode the world's spawn from level.dat.
             result['rtp_landing'] = [round(v, 3) for v in wire.position]
             result['rtp_durable_cooldown'] = True
-            pump(wire, .6)
+            pump(wire, 2.2)  # Success has a documented two-second global admission backoff.
             wire.send(0x06, suite.base.text('rtp'))
             pump(wire, 8, 'RTP будет доступен через')
             if state() != after:
