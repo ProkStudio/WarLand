@@ -17,6 +17,9 @@ jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -28,7 +31,12 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Test and build pinned Fabric toolchain
-        run: python3 tools/build.py clean test build
+        run: |
+          set +e
+          python3 tools/build.py clean test build > build-verification.log 2>&1
+          result=$?
+          cat build-verification.log
+          exit "$result"
       - name: Test restore and release checks
         env:
           PYTHONPATH: tools
@@ -42,8 +50,30 @@ jobs:
             build/libs/*.jar
             build/test-results/test/*.xml
             build/reports/tests/test/
+            build-verification.log
           if-no-files-found: warn
           retention-days: 14
+      - name: Publish bounded auth-runtime validation evidence
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'feature/auth-runtime' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('build-verification.log') ? fs.readFileSync('build-verification.log','utf8') : 'No build log.';
+            const lines = log.split('\n');
+            const indexes = lines.map((line,index) => /error:|FAILED|tests completed|BUILD SUCCESSFUL|BUILD FAILED/.test(line) ? index : -1).filter(i => i >= 0);
+            const excerpt = [...new Set(indexes.flatMap(i => lines.slice(Math.max(0,i-1),i+5)))].slice(0,90).join('\n').slice(0,10000);
+            const reportDir = 'build/test-results/test';
+            let tests = 0, skipped = 0, failures = 0, errors = 0; const details = [];
+            if (fs.existsSync(reportDir)) for (const file of fs.readdirSync(reportDir).filter(f => f.endsWith('.xml'))) {
+              const xml = fs.readFileSync(reportDir + '/' + file, 'utf8'); const suite = xml.match(/<testsuite\b[^>]+>/)?.[0] || '';
+              const number = key => Number(suite.match(new RegExp(key + '="([0-9]+)"'))?.[1] || 0);
+              tests += number('tests'); skipped += number('skipped'); failures += number('failures'); errors += number('errors');
+              for (const failure of xml.matchAll(/<failure\b[^>]*>/g)) details.push(file + ': ' + failure[0].slice(0,1500));
+            }
+            const summary = '\nJUnit reports: tests=' + tests + ', skipped=' + skipped + ', failures=' + failures + ', errors=' + errors + '\n' + details.slice(0,8).join('\n');
+            const body = 'Auth-runtime CI evidence for head `' + context.payload.pull_request.head.sha + '` (tested merge `' + context.sha + '`).\n\n```text\n' + ((excerpt || lines.slice(-30).join('\n')) + summary).replace(/```/g,'---') + '\n```\n\n[Full run](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + '). Compilation/unit evidence only; not live packet/crash acceptance.';
+            await github.rest.issues.createComment({...context.repo, issue_number: context.issue.number, body});
 
 # This workflow does not deploy, start a season, toggle financial features,
 # or substitute a Minecraft client/load/crash acceptance test.
