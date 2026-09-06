@@ -8,13 +8,14 @@
 
 ## Сейчас / точка продолжения
 
-**Проверка ядра регистрации и подключение игрового допуска.**
+**Ядро регистрации принято; следующий этап — игровой допуск.**
 
 - Рабочая интеграция: `development/initial-release` в https://github.com/ProkStudio/WarLand . `main` ещё не релиз.
-- PR #9: https://github.com/ProkStudio/WarLand/pull/9 ; ветка `feature/auth-registration`.
-- Код auth: Passwords, AuthRepository, Admission, Authentication. Добавлены AuthTest и AuthBoundaryTest. Последний кодовый коммит до документации: `5ee3ae9ea1f655c0d9ac890a0288a7492dcefcd0`.
+- [PR #9](https://github.com/ProkStudio/WarLand/pull/9) объединён в development, merge `2faaff2070f648ef83f54292aeffd61fdd660e3d`. История сохранена для отдельной ветки runtime.
+- Код auth: Passwords, AuthRepository, Admission, Authentication. Добавлены AuthTest, AuthBoundaryTest, AuthCancellationTest, AuthPipelineTest. Кодовая ревизия: `c4b547e8836468f147c0ddc16035f78edbb85ba6`. Вся цепочка ограничена 9 операциями ещё до БД; отмена и shutdown очищают секреты, ожидающие БД, немедленно. Permit не возвращается до завершения внутренней операции, чтобы переподключениями не раздувать очередь БД.
 - PBKDF2-SHA256/600000, ограниченный KDF-worker, SQL-регистрация, резерв владельца, одноразовый bootstrap, UUID/nonce-сессии и лимиты реализованы как движок. Это ещё НЕ /register или /login на сервере.
-- Перед merge проверить оба GitHub verify на актуальном HEAD. Не приписывать результат старой ревизии новой. Статус и доказательства дополняются в PR #9.
+- Оба verify на кодовом HEAD c4b547e успешно завершены: [PR job](https://github.com/ProkStudio/WarLand/actions/runs/34017228254/job/101443035090), [branch job](https://github.com/ProkStudio/WarLand/actions/runs/34017226357/job/101443029876). Полная сборка и проверки CI зелёные. Суммарные числа из XML этой ревизии отдельно не извлекались; не подменять ими числа предыдущего рыночного среза.
+- Отдельно начата реализация Minecraft-адаптера в `feature/auth-runtime`; её итог и CI ещё не приняты. Не смешивать статус ядра и игрового допуска. После публикации продолжение должно быть в `docs/HANDOFF_AUTH_RUNTIME.md` этой ветки.
 - Следующая работа: [AUTHENTICATION](docs/AUTHENTICATION.md), раздел обязательной интеграции. Не начинать парольный слой заново.
 
 Нужно подключить auth к CoreRuntime; отложить профили/деньги до входа; блокировать ВСЕ pre-auth действия (включая vanilla/alias-команды, чат, движение, инвентарь, урон, custom payload); скрыть ввод секретов из логов. Одного gate() недостаточно. При смене пароля согласовать отзыв всех сессий с login callback — CAS-ревизия сама этого не делает. Public offline-mode guard не снимать: обычный /login поверх незашифрованного offline-протокола небезопасен.
@@ -29,7 +30,7 @@
 
 ## Инфраструктурный блокер
 
-Minecraft/root shell возвращает HTTP 429; GitHub доступен. В sandbox нет javac, локальная проба не состоялась. Не засчитывать это как тесты. До потери доступа Paper `minecraft.service` и исходный `warland-staging.service` были активны; мы их не перезапускали и не заменяли.
+Minecraft/root shell возвращает HTTP 429; GitHub доступен. В sandbox нет executable javac, но работает `java -m jdk.compiler/com.sun.tools.javac.Main --release 21`. Локальный PasswordProbe прошёл round-trip/неверный пароль/уникальность соли/строгий work factor. Это не полная проверка Fabric/SQLite. Компьютерные файловые записи выполнять последовательно и проверять hashes: параллельные записи ранее оставили локальную копию без boundary-патча; GitHub boundary-тест и патч при этом сохранились. До потери доступа Paper `minecraft.service` и исходный `warland-staging.service` были активны; мы их не перезапускали и не заменяли.
 
 После восстановления shell сначала проверить:
 - `/opt/warland-build/market-escrow-full.exit` — ранее подтверждено `java=0 python=0`;
