@@ -1,5 +1,5 @@
 [Unit]
-Description=WarLand Fabric Minecraft Server
+Description=WarLand Fabric Minecraft Server (private local console)
 After=network-online.target
 StartLimitIntervalSec=300
 StartLimitBurst=3
@@ -9,16 +9,19 @@ Type=simple
 User=warland
 Group=warland
 WorkingDirectory=/opt/warland/runtime
-ExecStart=/usr/bin/java -Xms768M -Xmx2400M -XX:+UseG1GC -jar fabric-server-launch.jar nogui
+RuntimeDirectory=warland
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/python3 /opt/warland/app/tools/private_console.py serve --socket /run/warland/console.sock --cwd /opt/warland/runtime --grace 60 -- /usr/bin/java -Xms768M -Xmx2400M -XX:+UseG1GC -jar fabric-server-launch.jar nogui
 Restart=on-failure
 RestartSec=15
 TimeoutStopSec=90
 KillSignal=SIGTERM
+KillMode=mixed
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/warland/runtime
+ReadWritePaths=/opt/warland/runtime /run/warland
 UMask=0077
 
 [Install]
