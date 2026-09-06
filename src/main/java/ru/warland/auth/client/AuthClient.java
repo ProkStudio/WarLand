@@ -12,7 +12,9 @@ import net.minecraft.client.network.ClientConfigurationNetworkHandler;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
+import net.minecraft.util.StringHelper;
 import ru.warland.auth.AuthPayloads;
+import ru.warland.auth.SecretInput;
 import ru.warland.mixin.AuthClientConnectionAccess;
 
 /** No chat history, command completion, or password persistence. Dedicated-server companion UI. */
@@ -74,12 +76,22 @@ public final class AuthClient implements ClientModInitializer {
         }
         private final class SecretField extends TextFieldWidget {
             private final String label;
+            private final int limit;
             SecretField(int x, int y, String label, int limit) {
-                super(AuthScreen.this.textRenderer, x, y, 300, 20, Text.literal(label)); this.label = label;
-                // A paste exceeding the actual limit is rejected, never truncated into a valid password.
-                setMaxLength(limit + 1); setTextPredicate(value -> value.length() <= limit);
+                super(AuthScreen.this.textRenderer, x, y, 300, 20, Text.literal(label)); this.label = label; this.limit = limit;
+                setMaxLength(limit); setTextPredicate(value -> value.length() <= limit);
                 setPlaceholder(Text.literal(label));
                 addFormatter((value, index) -> Text.literal("•".repeat(value.length())).asOrderedText());
+            }
+            @Override public void write(String value) {
+                // Reject the complete input BEFORE vanilla clipping/Unicode boundary adjustment.
+                // Call the superclass selection getter only for its length; never export the value.
+                if (!SecretInput.fits(getText().length(), super.getSelectedText().length(), value, limit)
+                        || !StringHelper.stripInvalidChars(value).equals(value)) {
+                    status = "Ввод отклонён: недопустимые символы или превышен лимит поля.";
+                    return;
+                }
+                super.write(value);
             }
             @Override public String getSelectedText() { return ""; } // never export secrets with copy/cut
             @Override protected MutableText getNarrationMessage() { return Text.literal(label + ": скрыто"); }
