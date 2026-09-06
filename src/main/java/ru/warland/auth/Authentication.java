@@ -84,8 +84,10 @@ public final class Authentication implements AutoCloseable {
     private Result finish(Connection c) { return !closed && admission.authenticate(c.player(), c.nonce()) ? Result.SUCCESS : Result.DENIED; }
     private static CompletableFuture<Result> denied() { return CompletableFuture.completedFuture(Result.DENIED); }
     private CompletableFuture<Result> consume(char[] input, Function<char[], CompletableFuture<Result>> action) {
-        char[] secret = input == null ? null : input.clone();
-        if (input != null) Arrays.fill(input, '\0');
+        if (input == null) return denied();
+        if (input.length < 12 || input.length > 128) { Arrays.fill(input, '\0'); return denied(); }
+        char[] secret = input.clone();
+        Arrays.fill(input, '\0');
         try {
             Passwords.validate(secret);
             return action.apply(secret).exceptionally(error -> Result.DENIED).whenComplete((v, e) -> Arrays.fill(secret, '\0'));
