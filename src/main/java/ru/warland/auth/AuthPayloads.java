@@ -52,6 +52,7 @@ public final class AuthPayloads {
                 } finally { p.close(); }
             }
         };
+        @Override public Id<Request> getId() { return ID; }
         public final UUID nonce;
         public final boolean registration;
         private final char[] password, confirmation, token;

@@ -1,7 +1,7 @@
 package ru.warland.auth;
 import net.minecraft.network.listener.PacketListener;
 import net.minecraft.network.packet.Packet;
-import net.minecraft.network.packet.c2s.common.CustomPayloadC2SPacket;
+import net.minecraft.network.packet.c2s.common.*;
 import net.minecraft.network.packet.c2s.play.*;
 import net.minecraft.server.network.*;
 import ru.warland.core.CoreRuntime;
@@ -16,7 +16,11 @@ public final class AuthPacketGate {
    if (packet instanceof CommandExecutionC2SPacket p && RuntimePolicy.credentialCommand(p.command())) return true;
    if (packet instanceof ChatCommandSignedC2SPacket p && RuntimePolicy.credentialCommand(p.command())) return true;
    if (packet instanceof RequestCommandCompletionsC2SPacket p && RuntimePolicy.credentialCommand(p.getPartialCommand())) return true;
-   return !r.authorized(play.player);
+   boolean control = packet instanceof KeepAliveC2SPacket || packet instanceof CommonPongC2SPacket
+       || packet instanceof ClientOptionsC2SPacket || packet instanceof PlayerLoadedC2SPacket
+       || packet instanceof TeleportConfirmC2SPacket || packet instanceof AcknowledgeChunksC2SPacket
+       || packet instanceof PlayerSessionC2SPacket;
+   return control ? !r.auth.authenticated(play.player) : !r.authorized(play.player);
   }
   if (listener instanceof ServerConfigurationNetworkHandler config && packet instanceof CustomPayloadC2SPacket p) {
    if (r.auth.configurationReleased(config)) return false;
